@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #080a0f;
+  --surf:      #0e1118;
+  --card:      #141720;
+  --border:    #1e2230;
+  --border2:   #252a3a;
+  --accent:    #4f7cff;
+  --accent-lo: rgba(79,124,255,0.12);
+  --accent-hi: #7ba3ff;
+  --green:     #3dd68c;
+  --green-lo:  rgba(61,214,140,0.1);
+  --amber:     #f5a524;
+  --amber-lo:  rgba(245,165,36,0.1);
+  --red:       #f56060;
+  --red-lo:    rgba(245,96,96,0.1);
+  --text:      #e2e6f3;
+  --text-2:    #8892b0;
+  --text-3:    #4a5278;
+  --radius:    12px;
+  --radius-sm: 8px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.4);
+}
+
+body {
+  font-family: 'Instrument Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Zoom SDK override — force it to fill our container */
+#zmmtg-root { display: none; }
+.meeting-client { position: relative !important; }
+.meeting-client-inner { position: relative !important; }

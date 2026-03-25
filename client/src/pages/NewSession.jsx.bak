@@ -1,0 +1,283 @@
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { createMeeting } from '../lib/api'
+import './NewSession.css'
+
+const MENTORS = [
+  { id: 'pm', name: 'Priya Mehta',  title: 'Staff Engineer @ Google',   tags: ['System Design','DSA','FAANG'], color: '#6c74f7' },
+  { id: 'ag', name: 'Aryan Gupta', title: 'Product Lead @ Swiggy',      tags: ['Product','Strategy','GTM'],   color: '#e8b84b' },
+  { id: 'nr', name: 'Nalini Rao',  title: 'Design Director @ Razorpay', tags: ['UX/UI','Figma','Design Sys'], color: '#3dd68c' },
+  { id: 'vj', name: 'Vikram Joshi',title: 'Data Scientist @ Microsoft', tags: ['ML','Python','LLMs'],         color: '#c792ea' },
+]
+
+// Logged-in user — in a real app this comes from Supabase auth
+const CURRENT_USER = {
+  name:  'Arjun Kapoor',
+  email: 'goel_arun@hotmail.com',
+  role:  'mentee',
+  initials: 'AK',
+}
+
+export default function NewSession() {
+  const navigate = useNavigate()
+  const [mentor,   setMentor]   = useState('pm')
+  const [topic,    setTopic]    = useState('')
+  const [duration, setDuration] = useState(60)
+  // Pre-fill from logged-in user
+  const [yourName,  setYourName]  = useState(CURRENT_USER.name)
+  const [yourEmail, setYourEmail] = useState(CURRENT_USER.email)
+  // Default role matches the logged-in user's role
+  const [role,     setRole]     = useState(CURRENT_USER.role === 'mentor' ? '1' : '0')
+  const [loading,  setLoading]  = useState(false)
+  const [result,   setResult]   = useState(null)
+  const [err,      setErr]      = useState('')
+
+  const selectedMentor = MENTORS.find(m => m.id === mentor)
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!topic.trim()) { setErr('Please enter a session topic.'); return }
+    setErr(''); setLoading(true)
+    try {
+      const meeting = await createMeeting({ topic, duration, mentorName: selectedMentor.name })
+      const sessionData = {
+        meetingNumber: meeting.meetingId,
+        password:      meeting.password || '',
+        userName:      yourName,
+        userEmail:     yourEmail,
+        role:          Number(role),
+        topic:         meeting.topic,
+        mentorName:    selectedMentor.name,
+        joinUrl:       meeting.joinUrl,
+      }
+      sessionStorage.setItem('session', JSON.stringify(sessionData))
+      setResult({ ...meeting, ...sessionData })
+    } catch (e) {
+      setErr('Failed to create meeting: ' + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Success screen ──────────────────────────────────────────────────────────
+  if (result) return (
+    <div className="ns-wrap">
+      <div className="success-card">
+        <div className="success-tick">✓</div>
+        <h2 className="success-title">Meeting Created!</h2>
+        <p className="success-sub">These details are also shown on the session screen — you won't lose them</p>
+
+        <div className="meeting-details">
+          <div className="md-row">
+            <span className="md-label">Topic</span>
+            <span className="md-value">{result.topic}</span>
+          </div>
+          <div className="md-row highlight-row">
+            <span className="md-label">Meeting ID</span>
+            <span className="md-value mono big">{result.meetingNumber}</span>
+            <button className="copy-btn" onClick={() => {
+              navigator.clipboard.writeText(result.meetingNumber)
+            }}>Copy</button>
+          </div>
+          <div className="md-row highlight-row">
+            <span className="md-label">Password</span>
+            <span className="md-value mono big">{result.password || '(none)'}</span>
+            <button className="copy-btn" onClick={() => {
+              navigator.clipboard.writeText(result.password)
+            }}>Copy</button>
+          </div>
+          <div className="md-row">
+            <span className="md-label">Join URL</span>
+            <a className="md-link" href={result.joinUrl} target="_blank" rel="noreferrer">Open in Zoom App ↗</a>
+          </div>
+        </div>
+
+        {/* Who is joining */}
+        <div className="join-as-block">
+          <div className="join-as-row">
+            <div className="join-avatar" style={{ background: 'linear-gradient(135deg,#6c74f7,#9c73f8)' }}>
+              {CURRENT_USER.initials}
+            </div>
+            <div className="join-info">
+              <div className="join-name">{yourName}</div>
+              <div className="join-role-badge">
+                {Number(role) === 1 ? '🎓 Joining as Mentor (Host)' : '👤 Joining as Mentee (Participant)'}
+              </div>
+            </div>
+          </div>
+          <div className="join-with">↕ connecting with</div>
+          <div className="join-as-row">
+            <div className="join-avatar" style={{ background: selectedMentor.color }}>
+              {selectedMentor.name.split(' ').map(n=>n[0]).join('')}
+            </div>
+            <div className="join-info">
+              <div className="join-name">{selectedMentor.name}</div>
+              <div className="join-role-badge mentor-badge">
+                {Number(role) === 1 ? '👤 Will join as Mentee' : '🎓 Will join as Mentor (Host)'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="hint-box">
+          💡 Share Meeting ID <strong>{result.meetingNumber}</strong> and Password <strong>{result.password}</strong> with {selectedMentor.name}.<br/>
+          They open this app → New Session → join as Mentor using the same Meeting ID.
+        </div>
+
+        <div className="success-actions">
+          <button className="btn-primary-lg" onClick={() => navigate(`/session/${result.meetingNumber}`)}>
+            ▶ Join Now as {Number(role) === 1 ? 'Mentor (Host)' : 'Mentee'}
+          </button>
+          <button className="btn-ghost" onClick={() => { setResult(null); setTopic('') }}>
+            ← Create Another
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Form ────────────────────────────────────────────────────────────────────
+  return (
+    <div className="ns-wrap">
+      <div className="ns-grid">
+
+        <div className="ns-form-card">
+          <h2 className="ns-title">New Session</h2>
+          <p className="ns-sub">Create a Zoom meeting between mentor and mentee</p>
+
+          <form onSubmit={handleCreate}>
+
+            {/* Mentor picker */}
+            <div className="section">
+              <div className="section-label">Choose Mentor</div>
+              <div className="mentor-list">
+                {MENTORS.map(m => (
+                  <label key={m.id} className={`mentor-option ${mentor === m.id ? 'selected' : ''}`}>
+                    <input type="radio" name="mentor" value={m.id} checked={mentor === m.id} onChange={() => setMentor(m.id)} hidden />
+                    <div className="m-avatar" style={{ background: m.color }}>
+                      {m.name.split(' ').map(n=>n[0]).join('')}
+                    </div>
+                    <div className="m-info">
+                      <div className="m-name">{m.name}</div>
+                      <div className="m-title">{m.title}</div>
+                    </div>
+                    {mentor === m.id && <span className="m-check">✓</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Session details */}
+            <div className="section">
+              <div className="section-label">Session Details</div>
+              <div className="field">
+                <label className="field-label">Topic / Goal</label>
+                <input
+                  className="field-input"
+                  placeholder="e.g. System Design — Design a URL Shortener"
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
+                />
+              </div>
+              <div className="field-row">
+                <div className="field">
+                  <label className="field-label">Duration</label>
+                  <select className="field-input" value={duration} onChange={e => setDuration(Number(e.target.value))}>
+                    <option value={30}>30 minutes</option>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>60 minutes</option>
+                    <option value={90}>90 minutes</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">I am joining as</label>
+                  <select className="field-input" value={role} onChange={e => setRole(e.target.value)}>
+                    <option value="0">👤 Mentee (Participant)</option>
+                    <option value="1">🎓 Mentor (Host)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Logged-in user — pre-filled, editable */}
+            <div className="section">
+              <div className="section-label">
+                Your Info
+                <span className="autofill-badge">auto-filled from your account</span>
+              </div>
+              <div className="logged-in-banner">
+                <div className="li-avatar">{CURRENT_USER.initials}</div>
+                <div className="li-info">
+                  <div className="li-name">{CURRENT_USER.name}</div>
+                  <div className="li-email">{CURRENT_USER.email}</div>
+                </div>
+                <div className="li-role">{CURRENT_USER.role}</div>
+              </div>
+              <div className="field-row" style={{ marginTop: 12 }}>
+                <div className="field">
+                  <label className="field-label">Display Name in Meeting</label>
+                  <input className="field-input" value={yourName} onChange={e => setYourName(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Email</label>
+                  <input className="field-input" type="email" value={yourEmail} onChange={e => setYourEmail(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {err && <div className="err-box">⚠ {err}</div>}
+
+            <button className="btn-primary-lg" type="submit" disabled={loading}>
+              {loading ? '⏳ Creating Zoom Meeting…' : '📹 Create Zoom Meeting'}
+            </button>
+          </form>
+        </div>
+
+        {/* Right preview */}
+        <div className="ns-side">
+          <div className="preview-card">
+            <div className="preview-label">Session Preview</div>
+            <div className="preview-pair">
+              <div className="preview-user">
+                <div className="preview-avatar" style={{ background: 'linear-gradient(135deg,#6c74f7,#9c73f8)' }}>
+                  {CURRENT_USER.initials}
+                </div>
+                <div className="preview-user-name">{yourName || CURRENT_USER.name}</div>
+                <div className="preview-user-role">{Number(role) === 1 ? 'Mentor' : 'Mentee'}</div>
+              </div>
+              <div className="preview-arrow">⟷</div>
+              <div className="preview-user">
+                <div className="preview-avatar" style={{ background: selectedMentor.color }}>
+                  {selectedMentor.name.split(' ').map(n=>n[0]).join('')}
+                </div>
+                <div className="preview-user-name">{selectedMentor.name.split(' ')[0]}</div>
+                <div className="preview-user-role">{Number(role) === 1 ? 'Mentee' : 'Mentor'}</div>
+              </div>
+            </div>
+            <div className="preview-topic">{topic || 'Your session topic'}</div>
+            <div className="preview-meta">{duration} min session</div>
+            <div className="preview-tags">
+              {selectedMentor.tags.map(t => <span key={t} className="tag">{t}</span>)}
+            </div>
+          </div>
+
+          <div className="how-card">
+            <div className="how-title">How it works</div>
+            {[
+              ['1','Click Create — real Zoom meeting via API'],
+              ['2','Get Meeting ID + Password instantly'],
+              ['3','Click Join — Zoom loads right in this app'],
+              ['4','Share the ID with your mentor to join in a 2nd tab'],
+            ].map(([n, text]) => (
+              <div key={n} className="how-item">
+                <span className="how-num">{n}</span>
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}

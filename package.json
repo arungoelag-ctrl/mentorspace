@@ -1,0 +1,11 @@
+{
+  "name": "mentorspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "dev:server": "cd server && node index.js",
+    "dev:client": "cd client && npm run dev",
+    "setup": "npm run install:all && echo '\n✅ Done! Now open 2 terminals:\n  Terminal 1: npm run dev:server\n  Terminal 2: npm run dev:client\n'"
+  }
+}

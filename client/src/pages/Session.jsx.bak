@@ -1,0 +1,328 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { getSignature } from '../lib/api'
+import './Session.css'
+
+const CURRENT_USER = { name: 'Arjun Kapoor', email: 'goel_arun@hotmail.com', initials: 'AK' }
+
+function TranscriptLine({ line }) {
+  return (
+    <div className={`tx-line ${line.speaker === 'me' ? 'tx-me' : 'tx-other'}`}>
+      <div className="tx-meta">
+        <span className="tx-speaker">{line.name}</span>
+        <span className="tx-time">{line.time}</span>
+      </div>
+      <div className="tx-text">{line.text}</div>
+    </div>
+  )
+}
+
+function AiInsights({ transcript, topic }) {
+  const [summary, setSummary] = useState('')
+  const [questions, setQuestions] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [generated, setGenerated] = useState(false)
+
+  async function generate() {
+    if (transcript.length === 0) return
+    setLoading(true)
+    try {
+      const transcriptText = transcript.map(l => `${l.name}: ${l.text}`).join('\n')
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: `You are an AI assistant helping a mentor during a mentoring session.\n\nSession topic: ${topic || 'General mentoring session'}\n\nLive transcript so far:\n${transcriptText}\n\nProvide:\n1. A concise 3-4 sentence summary of what has been discussed\n2. Five specific follow-up questions the mentor should ask next\n\nRespond ONLY with valid JSON, no markdown:\n{"summary": "...", "questions": ["q1", "q2", "q3", "q4", "q5"]}`
+          }]
+        })
+      })
+      const data = await res.json()
+      const text = data.content[0].text
+      const parsed = JSON.parse(text.trim())
+      setSummary(parsed.summary)
+      setQuestions(parsed.questions)
+      setGenerated(true)
+    } catch (err) {
+      setSummary('Could not generate insights. Try again in a moment.')
+      setGenerated(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (transcript.length === 0) return (
+    <div className="ai-empty">
+      <div className="ai-empty-icon">🤖</div>
+      <p>AI insights will appear here once the conversation starts.</p>
+      <p className="ai-empty-sub">Needs at least a few lines of transcript.</p>
+    </div>
+  )
+
+  return (
+    <div className="ai-panel">
+      {!generated && !loading && (
+        <button className="ai-generate-btn" onClick={generate}>
+          ✨ Generate AI Insights
+        </button>
+      )}
+      {loading && (
+        <div className="ai-loading">
+          <div className="ai-spinner" />
+          <span>Analysing conversation…</span>
+        </div>
+      )}
+      {generated && !loading && (
+        <>
+          <div className="ai-section">
+            <div className="ai-section-label">📝 Summary</div>
+            <div className="ai-summary">{summary}</div>
+          </div>
+          <div className="ai-section">
+            <div className="ai-section-label">💡 Suggested Questions for Mentor</div>
+            <div className="ai-questions">
+              {questions.map((q, i) => (
+                <div key={i} className="ai-question">
+                  <span className="ai-q-num">{i + 1}</span>
+                  <span>{q}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="ai-refresh-btn" onClick={() => { setGenerated(false); generate() }}>
+            🔄 Refresh Insights
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+export default function Session() {
+  const { id: meetingNumber } = useParams()
+  const navigate = useNavigate()
+  const [phase, setPhase] = useState('setup')
+  const [role, setRole] = useState(null)
+  const [userName, setUserName] = useState(CURRENT_USER.name)
+  const [userEmail, setUserEmail] = useState(CURRENT_USER.email)
+  const [password, setPassword] = useState('')
+  const [topic, setTopic] = useState('')
+  const [mentorName, setMentorName] = useState('')
+  const [errMsg, setErrMsg] = useState('')
+  const [copied, setCopied] = useState('')
+  const [activeTab, setActiveTab] = useState('transcript')
+  const [transcript, setTranscript] = useState([])
+  const [demoMode, setDemoMode] = useState(false)
+  const transcriptEndRef = useRef(null)
+  const demoIntervalRef = useRef(null)
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem('session')
+    if (raw) {
+      const s = JSON.parse(raw)
+      if (s.meetingNumber === meetingNumber) {
+        setUserName(s.userName || CURRENT_USER.name)
+        setUserEmail(s.userEmail || CURRENT_USER.email)
+        setPassword(s.password || '')
+        setTopic(s.topic || '')
+        setMentorName(s.mentorName || '')
+        setRole(s.role === 1 ? 'mentor' : 'mentee')
+      }
+    }
+  }, [meetingNumber])
+
+  useEffect(() => {
+    if (transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [transcript])
+
+  function startDemoTranscript(sessionTopic, uName, mName) {
+    const lines = [
+      { name: uName || 'Mentee', speaker: 'me',    text: "Hi! Thanks for joining. I've been working on system design concepts and struggling with scale." },
+      { name: mName || 'Mentor', speaker: 'other', text: "Great to be here. What specific area are you finding most difficult?" },
+      { name: uName || 'Mentee', speaker: 'me',    text: "Mainly when to shard a database versus using a cache layer. The tradeoffs confuse me." },
+      { name: mName || 'Mentor', speaker: 'other', text: "That's a very common challenge. Let's start with fundamentals — what's your current understanding of horizontal vs vertical scaling?" },
+      { name: uName || 'Mentee', speaker: 'me',    text: "Vertical is adding more power to existing machines. Horizontal is adding more machines." },
+      { name: mName || 'Mentor', speaker: 'other', text: "Exactly right. Database sharding is horizontal scaling. The critical decision is your sharding key." },
+      { name: uName || 'Mentee', speaker: 'me',    text: "I'd probably shard by user ID so all data for one user stays in one shard." },
+      { name: mName || 'Mentor', speaker: 'other', text: "Good instinct! But consider — what if some users are far more active than others? That's the hot spot problem." },
+    ]
+    let i = 0
+    demoIntervalRef.current = setInterval(() => {
+      if (i < lines.length) {
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        setTranscript(prev => [...prev, { ...lines[i], time: now, id: Date.now() + i }])
+        i++
+      } else {
+        clearInterval(demoIntervalRef.current)
+      }
+    }, 2800)
+    setDemoMode(true)
+  }
+
+  function copy(text, label) {
+    navigator.clipboard.writeText(text)
+    setCopied(label)
+    setTimeout(() => setCopied(''), 2000)
+  }
+
+  const join = useCallback(async () => {
+    if (!userName.trim()) { setErrMsg('Please enter your name.'); return }
+    setErrMsg('')
+    setPhase('loading')
+    const uName = userName
+    const mName = mentorName
+    const t = topic
+    try {
+      const { ZoomMtg } = await import('@zoom/meetingsdk')
+      ZoomMtg.preLoadWasm()
+      ZoomMtg.prepareWebSDK()
+      const numericRole = role === 'mentor' ? 1 : 0
+      const { signature, sdkKey } = await getSignature({ meetingNumber, role: numericRole })
+
+      ZoomMtg.init({
+        leaveUrl: window.location.origin + '/',
+        patchJsMedia: true,
+        success: () => {
+          ZoomMtg.join({
+            signature, sdkKey, meetingNumber,
+            userName: uName.trim(),
+            userEmail: userEmail.trim(),
+            passWord: password,
+            success: () => { setPhase('live'); startDemoTranscript(t, uName, mName) },
+            error: (e) => { setErrMsg('Join failed: ' + (e.reason || JSON.stringify(e))); setPhase('setup') }
+          })
+        },
+        error: (e) => { setErrMsg('Init failed: ' + (e.reason || JSON.stringify(e))); setPhase('setup') }
+      })
+
+      setTimeout(() => {
+        setPhase(p => {
+          if (p === 'loading') { startDemoTranscript(t, uName, mName); return 'live' }
+          return p
+        })
+      }, 10000)
+
+    } catch (err) {
+      setErrMsg('Error: ' + err.message)
+      setPhase('setup')
+    }
+  }, [meetingNumber, role, userName, userEmail, password, topic, mentorName])
+
+  function leave() {
+    if (demoIntervalRef.current) clearInterval(demoIntervalRef.current)
+    setPhase('ended')
+    setTimeout(() => navigate('/'), 2000)
+  }
+
+  if (phase === 'setup') return (
+    <div className="session-setup">
+      <div className="setup-card">
+        <div className="setup-meeting-info">
+          <div className="smi-row"><span className="smi-label">Topic</span><span className="smi-value">{topic || 'Session'}</span></div>
+          <div className="smi-row"><span className="smi-label">Meeting ID</span><span className="smi-value mono accent">{meetingNumber}</span><button className="mini-copy" onClick={() => copy(meetingNumber, 'id')}>{copied === 'id' ? '✓' : 'Copy'}</button></div>
+          {password && <div className="smi-row"><span className="smi-label">Password</span><span className="smi-value mono accent">{password}</span><button className="mini-copy" onClick={() => copy(password, 'pw')}>{copied === 'pw' ? '✓' : 'Copy'}</button></div>}
+          {mentorName && <div className="smi-row"><span className="smi-label">Mentor</span><span className="smi-value">{mentorName}</span></div>}
+        </div>
+        <h2 className="setup-title">Ready to Join?</h2>
+        <div className="role-picker">
+          <button className={'role-btn ' + (role === 'mentee' ? 'selected' : '')} onClick={() => setRole('mentee')}><span className="role-icon">🙋</span><span className="role-label">Mentee</span><span className="role-sub">Attendee</span></button>
+          <button className={'role-btn ' + (role === 'mentor' ? 'selected' : '')} onClick={() => setRole('mentor')}><span className="role-icon">🎓</span><span className="role-label">Mentor</span><span className="role-sub">Host</span></button>
+        </div>
+        <div className="who-joining">
+          <div className="wj-avatar">{CURRENT_USER.initials}</div>
+          <div className="wj-info"><div className="wj-name">Joining as <strong>{userName}</strong></div><div className="wj-email">{userEmail}</div></div>
+        </div>
+        {errMsg && <div className="err-box">⚠ {errMsg}</div>}
+        <div className="setup-actions">
+          <button className="btn btn-ghost" onClick={() => navigate('/')}>← Back</button>
+          <button className="btn btn-primary btn-lg" onClick={join} disabled={!role}>{!role ? 'Pick a Role above' : '▶ Join as ' + (role === 'mentor' ? 'Mentor 🎓' : 'Mentee 🙋')}</button>
+        </div>
+        <div className="device-note">🎙 Chrome will ask for mic, speaker and camera — click Allow on all three.</div>
+      </div>
+    </div>
+  )
+
+  if (phase === 'loading') return (
+    <div className="session-loading">
+      <div className="loading-ring" />
+      <p className="loading-text">Connecting to Zoom…</p>
+      <p className="loading-sub">Zoom UI will appear in about 10 seconds</p>
+    </div>
+  )
+
+  if (phase === 'ended') return (
+    <div className="session-loading">
+      <div className="ended-icon">✓</div>
+      <p className="loading-text">Session ended</p>
+      <p className="loading-sub">Returning to dashboard…</p>
+    </div>
+  )
+
+  return (
+    <div className="session-live-wrap">
+      <div className="live-topbar">
+        <div className="live-left">
+          <span className="live-dot-big" />
+          <div>
+            <div className="live-topic">{topic || 'Live Session'}</div>
+            <div className="live-meta">
+              <span className="live-id">ID: {meetingNumber}</span>
+              {password && <span className="live-pw"> · PW: {password}</span>}
+              {mentorName && <span className="live-mentor"> · with {mentorName}</span>}
+              {demoMode && <span className="demo-badge">● DEMO TRANSCRIPT</span>}
+            </div>
+          </div>
+        </div>
+        <div className="live-right">
+          <div className="live-who">
+            <div className="live-avatar">{CURRENT_USER.initials}</div>
+            <div><div className="live-name">{userName}</div><div className="live-role-chip">{role}</div></div>
+          </div>
+          <button className="btn btn-danger btn-sm" onClick={leave}>Leave ✕</button>
+        </div>
+      </div>
+
+      <div className="live-workbench">
+        <div className="zoom-col">
+          <div id="meetingSDKElement" className="zoom-embed" />
+        </div>
+        <div className="side-panel">
+          <div className="panel-tabs">
+            <button className={'panel-tab ' + (activeTab === 'transcript' ? 'active' : '')} onClick={() => setActiveTab('transcript')}>
+              📝 Transcript {transcript.length > 0 && <span className="tab-count">{transcript.length}</span>}
+            </button>
+            <button className={'panel-tab ' + (activeTab === 'ai' ? 'active' : '')} onClick={() => setActiveTab('ai')}>
+              ✨ AI Insights
+            </button>
+          </div>
+          {activeTab === 'transcript' && (
+            <div className="transcript-body">
+              {transcript.length === 0 ? (
+                <div className="tx-empty">
+                  <div className="tx-empty-icon">🎙</div>
+                  <p>Transcript appears here as conversation happens.</p>
+                  <p className="tx-empty-sub">Demo transcript starts after joining.</p>
+                </div>
+              ) : (
+                <>
+                  {transcript.map(line => <TranscriptLine key={line.id} line={line} />)}
+                  <div ref={transcriptEndRef} />
+                </>
+              )}
+            </div>
+          )}
+          {activeTab === 'ai' && (
+            <div className="ai-body">
+              <AiInsights transcript={transcript} topic={topic} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
