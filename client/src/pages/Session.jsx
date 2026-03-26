@@ -22,11 +22,20 @@ function TranscriptTab({ transcript, setTranscript, meetingNumber, transcriptEnd
   const [error, setError] = useState('')
 
   function clickThroughMenus(finalLabel) {
+    // Temporarily boost z-index for More button
+    const affected = []
     document.querySelectorAll('[class*="more"], [class*="toolbar"], [class*="footer"]').forEach(el => {
-      if (el.style) el.style.zIndex = '999999'
+      if (el.style) {
+        affected.push({ el, prev: el.style.zIndex })
+        el.style.zIndex = '999999'
+      }
     })
+    // Restore z-index after clicks complete
+    const restoreZIndex = () => {
+      affected.forEach(({ el, prev }) => { el.style.zIndex = prev })
+    }
     const moreBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'More')
-    if (!moreBtn) return
+    if (!moreBtn) { restoreZIndex(); return }
     moreBtn.click()
     setTimeout(() => {
       const captionsEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === 'Captions')
@@ -35,8 +44,13 @@ function TranscriptTab({ transcript, setTranscript, meetingNumber, transcriptEnd
         setTimeout(() => {
           const targetEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === finalLabel)
           if (targetEl) targetEl.click()
-          setTimeout(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), 100)
+          setTimeout(() => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            restoreZIndex()
+          }, 100)
         }, 300)
+      } else {
+        restoreZIndex()
       }
     }, 300)
   }

@@ -356,7 +356,7 @@ app.post('/api/sessions/:meetingId/end', async (req, res) => {
 
     // Generate final AI summary
     let finalSummary = null
-    if (transcriptText.length > 50) {
+    if (transcriptText.length > 10 || finalTranscript.length > 0) {
       const prompt = `You are an AI assistant summarizing a mentoring session.
 
 Mentor: ${mentorName}

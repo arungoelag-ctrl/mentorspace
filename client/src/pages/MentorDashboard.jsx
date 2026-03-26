@@ -244,7 +244,9 @@ export default function MentorDashboard() {
 
   useEffect(() => {
     // If Zoom redirected us back, end the active meeting
+    console.log('Dashboard loaded, URL:', window.location.search)
     const activeMeeting = localStorage.getItem('activeMeeting')
+    console.log('activeMeeting in localStorage:', activeMeeting)
     if (activeMeeting) {
       localStorage.removeItem('activeMeeting')
       try {
