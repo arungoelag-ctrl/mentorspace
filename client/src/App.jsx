@@ -7,6 +7,7 @@ import MentorDashboard from './pages/MentorDashboard'
 import MenteeDashboard from './pages/MenteeDashboard'
 import NewSession from './pages/NewSession'
 import Session from './pages/Session'
+import IntelligenceDashboard from './pages/IntelligenceDashboard'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -32,6 +33,7 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/new" element={<ProtectedRoute><NewSession /></ProtectedRoute>} />
       <Route path="/session/:id" element={<ProtectedRoute><Session /></ProtectedRoute>} />
+      <Route path="/intelligence" element={<ProtectedRoute><IntelligenceDashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   )

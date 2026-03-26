@@ -309,6 +309,7 @@ export default function MentorDashboard() {
           </div>
         </div>
         <div className="md-top-right">
+          <button className="md-intel-btn" onClick={() => navigate('/intelligence')}>📊 Market Intelligence</button>
           <button className="md-new-btn" onClick={() => navigate('/new')}>+ New Session</button>
           <button className="md-signout" onClick={signOut}>Sign out</button>
         </div>

@@ -224,3 +224,5 @@
 .md-summary-exp-text {
   font-size: 13px; color: var(--text); line-height: 1.7;
 }
+.md-intel-btn { padding: 8px 16px; background: linear-gradient(135deg, #1a3a5c, #2d6a9f); color: #fff; border: none; border-radius: 8px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.md-intel-btn:hover { opacity: 0.9; transform: translateY(-1px); }

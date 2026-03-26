@@ -145,6 +145,46 @@ app.get('/api/zoom/me', async (req, res) => {
   }
 });
 
+
+// ─── GENERATE MARKET INTELLIGENCE ────────────────────────────────────────────
+app.post('/api/intelligence/generate', async (req, res) => {
+  try {
+    const { summaries, sessionCount } = req.body
+    const text = await callClaude(`You are a market intelligence analyst for Wadhwani Foundation, which runs mentoring programs for entrepreneurs and businesses across India and emerging markets.
+
+You have access to summaries from ${sessionCount} mentoring sessions. Extract market intelligence cards from these transcripts.
+
+Session summaries:
+${summaries}
+
+Generate 6-8 market intelligence cards covering different sectors, themes and geographies found in the data. Each card should represent a distinct insight about markets, competition, challenges, or opportunities discussed.
+
+Respond ONLY with valid JSON array:
+[
+  {
+    "title": "Concise intelligence title",
+    "summary": "2-3 sentence overview of the insight",
+    "key_insight": "Single most important takeaway in one sentence",
+    "sector": "One of: Manufacturing/SaaS/Fintech/Healthcare/FMCG/Agritech/EV/E-commerce/Export/Retail/EdTech/AI-ML/Climate Tech/Logistics/General",
+    "geography": "One of: India/Southeast Asia/Europe/USA/Middle East/Africa/Latin America/Global",
+    "theme": "One of: Market Entry/GTM Strategy/Fundraising/Competition/Product/Export/Scaling/Regulation/Distribution/General",
+    "confidence": "4.5",
+    "opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
+    "challenges": ["challenge 1", "challenge 2"],
+    "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"],
+    "session_count": 1
+  }
+]`)
+
+    const cards = JSON.parse(text.trim())
+    const dated = cards.map(card => ({ ...card, created_at: new Date().toISOString() }))
+    res.json({ cards: dated })
+  } catch (err) {
+    console.error('Intelligence generate error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`\n🚀 MentorSpace Server running on http://localhost:${PORT}`);
