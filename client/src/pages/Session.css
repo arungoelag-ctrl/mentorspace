@@ -591,3 +591,26 @@
   font-size: 12px; color: #6b6f94; text-align: center;
   padding: 12px; line-height: 1.6; font-family: 'DM Mono', monospace;
 }
+
+.tx-enable-btn {
+  flex: 1; padding: 10px 14px;
+  background: linear-gradient(135deg, #e85d26, #f07a3a);
+  color: #fff; border: none; border-radius: 8px;
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s;
+}
+.tx-enable-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(232,93,38,0.4); }
+.tx-enable-btn.active { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+.tx-enable-btn.active:hover { box-shadow: 0 4px 16px rgba(231,76,60,0.4); }
+
+.tx-enable-btn {
+  flex: 1; padding: 10px 14px;
+  background: linear-gradient(135deg, #e85d26, #f07a3a);
+  color: #fff; border: none; border-radius: 8px;
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.18s;
+  width: 100%;
+}
+.tx-enable-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(232,93,38,0.4); }
+.tx-enable-btn.active { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+.tx-enable-btn.active:hover { box-shadow: 0 4px 16px rgba(231,76,60,0.4); }

@@ -18,32 +18,47 @@ function TranscriptLine({ line }) {
   )
 }
 
-function TranscriptTab({ transcript, setTranscript, meetingNumber, transcriptEndRef }) {
+function TranscriptTab({ transcript, setTranscript, meetingNumber, transcriptEndRef, transcriptActiveRef, transcriptActive, setTranscriptActive }) {
   const [error, setError] = useState('')
 
-  function enableTranscript() {
-    document.querySelectorAll('[class*="more"]').forEach(el => { if (el.style) el.style.zIndex = '999999' })
+  function clickThroughMenus(finalLabel) {
+    document.querySelectorAll('[class*="more"], [class*="toolbar"], [class*="footer"]').forEach(el => {
+      if (el.style) el.style.zIndex = '999999'
+    })
     const moreBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'More')
-    if (moreBtn) {
-      moreBtn.click()
-      setTimeout(() => {
-        document.querySelectorAll('[class*="more"]').forEach(el => { if (el.style) el.style.zIndex = '999999' })
-        const captionsEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === 'Captions')
-        if (captionsEl) {
-          captionsEl.click()
-          setTimeout(() => {
-            const showEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === 'Show Captions')
-            if (showEl) showEl.click()
-          }, 500)
-        }
-      }, 600)
+    if (!moreBtn) return
+    moreBtn.click()
+    setTimeout(() => {
+      const captionsEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === 'Captions')
+      if (captionsEl) {
+        captionsEl.click()
+        setTimeout(() => {
+          const targetEl = Array.from(document.querySelectorAll('*')).find(e => e.children.length === 0 && e.textContent.trim() === finalLabel)
+          if (targetEl) targetEl.click()
+          setTimeout(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), 100)
+        }, 300)
+      }
+    }, 300)
+  }
+
+  function toggleTranscript() {
+    if (transcriptActive) {
+      clickThroughMenus('Hide Captions')
+      if (transcriptActiveRef) transcriptActiveRef.current = false
+      setTranscriptActive(false)
+    } else {
+      clickThroughMenus('Show Captions')
+      if (transcriptActiveRef) transcriptActiveRef.current = true
+      setTranscriptActive(true)
     }
   }
 
   return (
     <div className="transcript-body">
       <div className="tx-enable-bar">
-        <button className="tx-enable-btn" onClick={enableTranscript}>🎙 Enable Live Transcript</button>
+        <button className={`tx-enable-btn ${transcriptActive ? 'active' : ''}`} onClick={toggleTranscript}>
+          {transcriptActive ? '⏹ Disable Live Transcript' : '🎙 Enable Live Transcript'}
+        </button>
       </div>
 
       {error && <div className="tx-error">⚠ {error}</div>}
@@ -196,6 +211,8 @@ export default function Session() {
   const transcriptEndRef = useRef(null)
   const zoomRef = useRef(null)
   const transcriptRef = useRef([])
+  const transcriptActiveRef = useRef(false)
+  const [transcriptActive, setTranscriptActive] = useState(false)
 
   const role = profile?.role || 'mentor'
   const initials = (profile?.full_name || 'AK').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -226,6 +243,7 @@ export default function Session() {
 
   useEffect(() => {
     transcriptRef.current = transcript
+    // sync transcriptActiveRef from TranscriptTab is done via window
     if (transcript.length > 0) {
       sessionStorage.setItem('lastTranscript', JSON.stringify(transcript))
     }
@@ -348,6 +366,7 @@ export default function Session() {
 
       try {
         ZoomMtg.inMeetingServiceListener('onReceiveTranscriptionMsg', (data) => {
+          if (!transcriptActiveRef.current) return
           if (!data?.text?.trim()) return
           const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           const isMe = data.displayName === uName.trim()
@@ -511,7 +530,7 @@ export default function Session() {
               </button>
             )}
           </div>
-          {activeTab === 'transcript' && <TranscriptTab transcript={transcript} setTranscript={setTranscript} meetingNumber={meetingNumber} transcriptEndRef={transcriptEndRef} />}
+          {activeTab === 'transcript' && <TranscriptTab transcript={transcript} setTranscript={setTranscript} meetingNumber={meetingNumber} transcriptEndRef={transcriptEndRef} transcriptActiveRef={transcriptActiveRef} transcriptActive={transcriptActive} setTranscriptActive={setTranscriptActive} />}
           {activeTab === 'ai' && <div className="ai-body"><AiInsights transcript={transcript} topic={topic} insights={insights} setInsights={setInsights} meetingNumber={meetingNumber} /></div>}
           {activeTab === 'brief' && role === 'mentor' && <PreMeetingBrief menteeName={menteeName || 'mentee'} mentorName={userName} compact={true} />}
         </div>

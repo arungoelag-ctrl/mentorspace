@@ -89,6 +89,7 @@ export default function MenteeDashboard() {
   const [sessions, setSessions] = useState([])
   const [insights, setInsights] = useState([])
   const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('all')
   const [activeView, setActiveView] = useState('sessions')
   const [joinId, setJoinId] = useState('')
   const [joinPw, setJoinPw] = useState('')
@@ -139,6 +140,7 @@ export default function MenteeDashboard() {
           </div>
         </div>
         <div className="md-top-right">
+          <button className="md-intel-btn" onClick={() => navigate('/intelligence')}>📊 Market Intelligence</button>
           <button className="md-signout" onClick={signOut}>Sign out</button>
         </div>
       </div>
@@ -146,17 +148,26 @@ export default function MenteeDashboard() {
       <div className="mentee-body">
         {/* Stats */}
         <div className="md-stats">
-          {[
-            { label: 'Sessions Attended', value: sessions.length },
-            { label: 'Completed', value: sessions.filter(s=>s.status==='ended').length },
-            { label: 'Mentors', value: uniqueMentors.length },
-            { label: 'AI Insights', value: finalInsights.length },
-          ].map(s => (
-            <div key={s.label} className="md-stat">
-              <div className="md-stat-val">{s.value}</div>
-              <div className="md-stat-label">{s.label}</div>
-            </div>
-          ))}
+          <div className={`md-stat md-stat-clickable ${statusFilter==='all'?'active':''}`} onClick={()=>setStatusFilter('all')}>
+            <div className="md-stat-val">{sessions.length}</div>
+            <div className="md-stat-label">All Sessions</div>
+          </div>
+          <div className={`md-stat md-stat-clickable ${statusFilter==='active'?'active':''}`} onClick={()=>setStatusFilter('active')}>
+            <div className="md-stat-val">{sessions.filter(s=>s.status==='active').length}</div>
+            <div className="md-stat-label">Active</div>
+          </div>
+          <div className={`md-stat md-stat-clickable ${statusFilter==='ended'?'active':''}`} onClick={()=>setStatusFilter('ended')}>
+            <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
+            <div className="md-stat-label">Completed</div>
+          </div>
+          <div className="md-stat">
+            <div className="md-stat-val">{uniqueMentors.length}</div>
+            <div className="md-stat-label">Mentors</div>
+          </div>
+          <div className="md-stat">
+            <div className="md-stat-val">{finalInsights.length}</div>
+            <div className="md-stat-label">AI Insights</div>
+          </div>
         </div>
 
         {/* Quick Join */}
@@ -187,9 +198,10 @@ export default function MenteeDashboard() {
 
         {activeView === 'sessions' && (
           <div className="mentee-sessions-list">
+
             {loading ? <div className="md-loading">Loading…</div> :
              sessions.length === 0 ? <div className="md-empty">No sessions yet.<br/>Use the Join box above when your mentor shares a Meeting ID.</div> :
-             sessions.map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
+             sessions.filter(s => statusFilter === 'all' || s.status === statusFilter).map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
           </div>
         )}
 

@@ -336,23 +336,26 @@ export default function MentorDashboard() {
         <div className="md-main">
           {!selectedMentee ? (
             <>
-              <div className="md-filters">
-                <button className={`md-filter-pill ${statusFilter==='all'?'active':''}`} onClick={()=>setStatusFilter('all')}>
-                  All <span className="md-filter-count">{sessions.length}</span>
-                </button>
-                <button className={`md-filter-pill ${statusFilter==='active'?'active':''}`} onClick={()=>setStatusFilter('active')}>
-                  Active <span className="md-filter-count">{sessions.filter(s=>s.status==='active').length}</span>
-                </button>
-                <button className={`md-filter-pill ${statusFilter==='ended'?'active':''}`} onClick={()=>setStatusFilter('ended')}>
-                  Completed <span className="md-filter-count">{sessions.filter(s=>s.status==='ended').length}</span>
-                </button>
-                <div className="md-filter-stat">
-                  <span className="md-filter-stat-val">{mentees.length}</span>
-                  <span className="md-filter-stat-label">Mentees</span>
+              <div className="md-stats">
+                <div className={`md-stat md-stat-clickable ${statusFilter==='all'?'active':''}`} onClick={()=>setStatusFilter('all')}>
+                  <div className="md-stat-val">{sessions.length}</div>
+                  <div className="md-stat-label">All Sessions</div>
                 </div>
-                <div className="md-filter-stat">
-                  <span className="md-filter-stat-val">{insights.length}</span>
-                  <span className="md-filter-stat-label">Insights</span>
+                <div className={`md-stat md-stat-clickable ${statusFilter==='active'?'active':''}`} onClick={()=>setStatusFilter('active')}>
+                  <div className="md-stat-val">{sessions.filter(s=>s.status==='active').length}</div>
+                  <div className="md-stat-label">Active</div>
+                </div>
+                <div className={`md-stat md-stat-clickable ${statusFilter==='ended'?'active':''}`} onClick={()=>setStatusFilter('ended')}>
+                  <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
+                  <div className="md-stat-label">Completed</div>
+                </div>
+                <div className="md-stat">
+                  <div className="md-stat-val">{mentees.length}</div>
+                  <div className="md-stat-label">Mentees</div>
+                </div>
+                <div className="md-stat">
+                  <div className="md-stat-val">{insights.length}</div>
+                  <div className="md-stat-label">Insights</div>
                 </div>
               </div>
 
