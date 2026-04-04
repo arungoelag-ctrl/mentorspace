@@ -21,7 +21,7 @@
 /* Sections */
 .section { margin-bottom: 28px; }
 .section-label {
-  font-size: 10px; font-family: 'DM Mono', monospace;
+  font-size: 10px; font-family: 'Consolas', 'Courier New', monospace;
   color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em;
   margin-bottom: 12px;
 }
@@ -51,11 +51,11 @@
 /* Fields */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.field-label { font-size: 11px; font-family: 'DM Mono', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.06em; }
+.field-label { font-size: 11px; font-family: 'Consolas', 'Courier New', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.06em; }
 .field-input {
   width: 100%; background: #0f1119; border: 1px solid #1e2235;
   border-radius: 8px; color: #e6e8f4;
-  font-family: 'Instrument Sans', sans-serif; font-size: 14px;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif; font-size: 14px;
   padding: 10px 14px; outline: none; transition: border-color 0.15s;
   appearance: none;
 }
@@ -72,7 +72,7 @@
 .btn-primary-lg {
   width: 100%; padding: 13px;
   background: #6c74f7; color: #fff; border: none;
-  border-radius: 8px; font-family: 'Instrument Sans', sans-serif;
+  border-radius: 8px; font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif;
   font-size: 15px; font-weight: 600; cursor: pointer;
   transition: all 0.18s; letter-spacing: -0.2px;
 }
@@ -81,7 +81,7 @@
 .btn-ghost {
   padding: 11px 20px; background: #0f1119; color: #e6e8f4;
   border: 1px solid #1e2235; border-radius: 8px;
-  font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 500;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif; font-size: 14px; font-weight: 500;
   cursor: pointer; transition: all 0.15s;
 }
 .btn-ghost:hover { border-color: #6c74f7; color: #6c74f7; }
@@ -93,7 +93,7 @@
   background: #141720; border: 1px solid #1e2235;
   border-radius: 18px; padding: 22px; text-align: center;
 }
-.preview-label { font-size: 10px; font-family: 'DM Mono', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
+.preview-label { font-size: 10px; font-family: 'Consolas', 'Courier New', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
 .preview-pair  { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; }
 .preview-avatar {
   width: 48px; height: 48px; border-radius: 14px;
@@ -108,19 +108,19 @@
   background: rgba(108,116,247,0.1); color: #6c74f7;
   border: 1px solid rgba(108,116,247,0.2);
   padding: 3px 10px; border-radius: 99px;
-  font-size: 11px; font-family: 'DM Mono', monospace;
+  font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;
 }
 
 .how-card {
   background: #141720; border: 1px solid #1e2235;
   border-radius: 18px; padding: 20px;
 }
-.how-title { font-size: 10px; font-family: 'DM Mono', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
+.how-title { font-size: 10px; font-family: 'Consolas', 'Courier New', monospace; color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; }
 .how-item  { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: #6b6f94; margin-bottom: 10px; line-height: 1.5; }
 .how-num {
   width: 22px; height: 22px; border-radius: 50%;
   background: rgba(108,116,247,0.12); border: 1px solid rgba(108,116,247,0.3);
-  color: #6c74f7; font-size: 10px; font-family: 'DM Mono', monospace;
+  color: #6c74f7; font-size: 10px; font-family: 'Consolas', 'Courier New', monospace;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
@@ -143,15 +143,15 @@
 .meeting-details { background: #0f1119; border: 1px solid #1e2235; border-radius: 12px; padding: 18px; text-align: left; margin-bottom: 16px; }
 .md-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #1e2235; font-size: 13px; }
 .md-row:last-child { border-bottom: none; }
-.md-label { color: #6b6f94; font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; width: 80px; flex-shrink: 0; }
+.md-label { color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; width: 80px; flex-shrink: 0; }
 .md-value { color: #e6e8f4; font-weight: 600; flex: 1; }
-.md-value.mono { font-family: 'DM Mono', monospace; color: #6c74f7; }
+.md-value.mono { font-family: 'Consolas', 'Courier New', monospace; color: #6c74f7; }
 .md-link  { color: #6c74f7; font-size: 13px; text-decoration: none; }
 .md-link:hover { text-decoration: underline; }
 .copy-btn {
   padding: 3px 10px; background: rgba(108,116,247,0.1);
   border: 1px solid rgba(108,116,247,0.25); color: #6c74f7;
-  border-radius: 99px; font-family: 'DM Mono', monospace;
+  border-radius: 99px; font-family: 'Consolas', 'Courier New', monospace;
   font-size: 11px; cursor: pointer; transition: background 0.15s;
 }
 .copy-btn:hover { background: rgba(108,116,247,0.2); }
@@ -166,7 +166,7 @@
 
 /* ── Auto-fill badge ── */
 .autofill-badge {
-  font-size: 9px; font-family: 'DM Mono', monospace;
+  font-size: 9px; font-family: 'Consolas', 'Courier New', monospace;
   background: rgba(61,214,140,0.1); color: #3dd68c;
   border: 1px solid rgba(61,214,140,0.25);
   padding: 2px 8px; border-radius: 99px;
@@ -188,10 +188,10 @@
   font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0;
 }
 .li-name  { font-size: 13px; font-weight: 600; color: #e6e8f4; }
-.li-email { font-size: 11px; color: #6b6f94; margin-top: 1px; font-family: 'DM Mono', monospace; }
+.li-email { font-size: 11px; color: #6b6f94; margin-top: 1px; font-family: 'Consolas', 'Courier New', monospace; }
 .li-role  {
   margin-left: auto;
-  font-size: 10px; font-family: 'DM Mono', monospace;
+  font-size: 10px; font-family: 'Consolas', 'Courier New', monospace;
   background: rgba(108,116,247,0.12); color: #6c74f7;
   border: 1px solid rgba(108,116,247,0.25);
   padding: 3px 10px; border-radius: 99px; text-transform: uppercase;
@@ -203,7 +203,7 @@
   border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: left;
 }
 .join-as-row { display: flex; align-items: center; gap: 12px; }
-.join-with   { font-size: 11px; color: #3a3f5c; text-align: center; margin: 8px 0; font-family: 'DM Mono', monospace; }
+.join-with   { font-size: 11px; color: #3a3f5c; text-align: center; margin: 8px 0; font-family: 'Consolas', 'Courier New', monospace; }
 .join-avatar {
   width: 40px; height: 40px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -212,7 +212,7 @@
 .join-name { font-size: 14px; font-weight: 600; color: #e6e8f4; }
 .join-role-badge {
   font-size: 11px; color: #6b6f94; margin-top: 2px;
-  font-family: 'DM Mono', monospace;
+  font-family: 'Consolas', 'Courier New', monospace;
 }
 .mentor-badge { color: #e8b84b; }
 
@@ -223,5 +223,5 @@
 /* ── Preview user labels ── */
 .preview-user { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .preview-user-name { font-size: 12px; font-weight: 600; color: #e6e8f4; }
-.preview-user-role { font-size: 10px; color: #6b6f94; font-family: 'DM Mono', monospace; }
+.preview-user-role { font-size: 10px; color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; }
 .preview-arrow { font-size: 20px; color: #3a3f5c; padding: 0 4px; }

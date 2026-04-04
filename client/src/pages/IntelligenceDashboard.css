@@ -32,7 +32,7 @@
   font-size: 15px; font-weight: 700; color: #1a2b3c;
   line-height: 1.2;
 }
-.intel-logo-sub { font-size: 10px; color: #8a9bb0; font-family: 'DM Mono', monospace; letter-spacing: 0.05em; }
+.intel-logo-sub { font-size: 10px; color: #8a9bb0; font-family: 'Consolas', 'Courier New', monospace; letter-spacing: 0.05em; }
 
 .intel-nav { display: flex; gap: 4px; }
 .intel-nav-btn {
@@ -79,7 +79,7 @@
   font-family: 'Playfair Display', serif;
   font-size: 26px; font-weight: 700; color: #fff; line-height: 1;
 }
-.intel-stat-label { font-size: 11px; color: rgba(255,255,255,0.5); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+.intel-stat-label { font-size: 11px; color: rgba(255,255,255,0.5); font-family: 'Consolas', 'Courier New', monospace; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 
 /* Body */
 .intel-body { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
@@ -102,7 +102,7 @@
 .intel-filter-group { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .intel-filter-label {
   font-size: 12px; font-weight: 600; color: #6b7a8a;
-  font-family: 'DM Mono', monospace; text-transform: uppercase;
+  font-family: 'Consolas', 'Courier New', monospace; text-transform: uppercase;
   letter-spacing: 0.06em; white-space: nowrap; min-width: 80px;
 }
 .intel-filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -138,7 +138,7 @@
 .intel-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .intel-tag {
   font-size: 11px; font-weight: 600; padding: 3px 10px;
-  border-radius: 99px; font-family: 'DM Mono', monospace;
+  border-radius: 99px; font-family: 'Consolas', 'Courier New', monospace;
 }
 .intel-tag.sector { background: #edf2f7; color: #1a3a5c; }
 .intel-tag.geo { background: #f0faf4; color: #276749; }
@@ -224,7 +224,7 @@
 .intel-modal-summary { font-size: 14px; color: #5a6a7a; line-height: 1.7; margin-bottom: 20px; }
 .intel-modal-section { margin-bottom: 20px; }
 .intel-modal-label {
-  font-size: 11px; font-family: 'DM Mono', monospace;
+  font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;
   color: #8a9bb0; text-transform: uppercase; letter-spacing: 0.1em;
   margin-bottom: 10px;
 }
@@ -242,10 +242,10 @@
 .intel-modal-num {
   width: 22px; height: 22px; border-radius: 50%;
   background: #edf2f7; color: #1a3a5c;
-  font-size: 10px; font-family: 'DM Mono', monospace; font-weight: 700;
+  font-size: 10px; font-family: 'Consolas', 'Courier New', monospace; font-weight: 700;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .intel-modal-meta {
   margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0ede8;
-  font-size: 11px; color: #aaa; font-family: 'DM Mono', monospace;
+  font-size: 11px; color: #aaa; font-family: 'Consolas', 'Courier New', monospace;
 }

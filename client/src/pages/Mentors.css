@@ -1,11 +1,11 @@
 .mentors-page {}
 .mentors-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; }
-.mentors-title { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; }
+.mentors-title { font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif; font-size: 24px; font-weight: 800; }
 .mentors-sub { font-size: 14px; color: var(--text-2); margin-top: 4px; }
 .mentors-search {
   background: var(--card); border: 1px solid var(--border2);
   border-radius: var(--radius-sm); color: var(--text);
-  font-family: 'Instrument Sans', sans-serif; font-size: 14px;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif; font-size: 14px;
   padding: 10px 16px; outline: none; width: 240px;
   transition: border-color .15s;
 }
@@ -33,7 +33,7 @@
   background: var(--accent-lo); color: var(--accent-hi);
   border: 1px solid rgba(79,124,255,.2);
   padding: 3px 10px; border-radius: 99px;
-  font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;
 }
 
 .mc-meta {

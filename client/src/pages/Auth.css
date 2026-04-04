@@ -71,7 +71,7 @@
 
 /* Role picker */
 .role-pick {
-  display: grid; grid-template-columns: 1fr 1fr;
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
   gap: 10px; margin-bottom: 20px;
 }
 .role-pick-btn {

@@ -35,7 +35,7 @@
   font-size: 15px; font-weight: 700; color: #e6e8f4;
   font-family: 'Fraunces', serif; display: flex; align-items: center; gap: 6px;
 }
-.pmb-meta { font-size: 11px; color: #6b6f94; font-family: 'DM Mono', monospace; margin-top: 2px; }
+.pmb-meta { font-size: 11px; color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }
 .pmb-fresh {
   margin-left: 8px; color: #e8b84b;
   background: rgba(232,184,75,0.1); padding: 1px 8px;
@@ -51,7 +51,7 @@
 
 .pmb-section { display: flex; flex-direction: column; gap: 8px; }
 .pmb-section-label {
-  font-size: 10px; font-family: 'DM Mono', monospace;
+  font-size: 10px; font-family: 'Consolas', 'Courier New', monospace;
   color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em;
 }
 
@@ -74,7 +74,7 @@
   background: rgba(108,116,247,0.1); color: #6c74f7;
   border: 1px solid rgba(108,116,247,0.2);
   padding: 4px 12px; border-radius: 99px;
-  font-size: 12px; font-family: 'DM Mono', monospace;
+  font-size: 12px; font-family: 'Consolas', 'Courier New', monospace;
 }
 
 .pmb-questions { display: flex; flex-direction: column; gap: 8px; }
@@ -88,7 +88,7 @@
 .pmb-q-num {
   width: 22px; height: 22px; border-radius: 50%;
   background: rgba(108,116,247,0.2); color: #6c74f7;
-  font-size: 10px; font-family: 'DM Mono', monospace; font-weight: 700;
+  font-size: 10px; font-family: 'Consolas', 'Courier New', monospace; font-weight: 700;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
@@ -101,8 +101,8 @@
 .pmb-session-num {
   width: 24px; height: 24px; border-radius: 50%;
   background: #1e2235; color: #6b6f94;
-  font-size: 11px; font-family: 'DM Mono', monospace;
+  font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .pmb-session-topic { font-size: 13px; font-weight: 600; color: #e6e8f4; }
-.pmb-session-date { font-size: 11px; color: #6b6f94; font-family: 'DM Mono', monospace; margin-top: 2px; }
+.pmb-session-date { font-size: 11px; color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }

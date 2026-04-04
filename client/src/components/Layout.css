@@ -27,13 +27,13 @@
   background: var(--accent);
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif;
   font-size: 18px; font-weight: 800;
   color: #fff;
   flex-shrink: 0;
 }
 .logo-text {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif;
   font-size: 17px;
   font-weight: 700;
   color: var(--text);
@@ -87,7 +87,7 @@
 }
 .user-meta { flex: 1; }
 .user-name { display: block; font-size: 13px; font-weight: 600; color: var(--text); }
-.user-role { display: block; font-size: 11px; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+.user-role { display: block; font-size: 11px; color: var(--accent); font-family: 'Consolas', 'Courier New', monospace; }
 .online-dot {
   width: 8px; height: 8px;
   border-radius: 50%;
@@ -125,7 +125,7 @@
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 18px;
   border-radius: var(--radius-sm);
-  font-family: 'Instrument Sans', sans-serif;
+  font-family: 'Calibri', 'Gill Sans', 'Trebuchet MS', sans-serif;
   font-size: 14px; font-weight: 600;
   cursor: pointer; border: none;
   transition: all 0.16s;

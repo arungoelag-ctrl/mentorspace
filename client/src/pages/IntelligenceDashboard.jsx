@@ -51,7 +51,7 @@ export default function IntelligenceDashboard() {
     if (insights.length === 0) return
     setGenerating(true)
     try {
-      const transcriptSummaries = insights.slice(0, 20).map(ins => {
+      const transcriptSummaries = insights.slice(0, 50).map(ins => {
         const session = sessions.find(s => s.meeting_id === ins.session_id)
         return `Topic: ${session?.topic || 'General'} | ${ins.summary}`
       }).join('\n\n')
@@ -63,7 +63,6 @@ export default function IntelligenceDashboard() {
       })
       const data = await res.json()
       if (data.cards) {
-        // Save cards to Supabase
         for (const card of data.cards) {
           await supabase.from('intelligence_cards').upsert(card, { onConflict: 'title' })
         }

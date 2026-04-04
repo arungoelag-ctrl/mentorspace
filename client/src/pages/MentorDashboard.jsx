@@ -4,6 +4,8 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 import TranscriptViewer from './TranscriptViewer'
 import MenteeHistory from './MenteeHistory'
+import MentorRequestsTab from './MentorRequests'
+import MentorAvailabilityTab from './MentorAvailability'
 import './MentorDashboard.css'
 
 function hour() {
@@ -36,7 +38,7 @@ function SessionCard({ session, insights }) {
             </div>
           </div>
           <div className="md-session-card-right">
-            <div className={`md-session-status ${session.status}`}>{session.status}</div>
+            <div className={`md-session-status ${session.status}`}>{session.status === 'ended' ? 'completed' : session.status === 'active' ? 'in progress' : session.status}</div>
             <span className="md-expand-icon">{expanded ? '▲' : '▼'}</span>
           </div>
         </div>
@@ -241,6 +243,8 @@ export default function MentorDashboard() {
   const [selectedMentee, setSelectedMentee] = useState(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [mainTab, setMainTab] = useState('sessions')
+  const [requestsFilter, setRequestsFilter] = useState('pending')
 
   useEffect(() => {
     // If Zoom redirected us back, end the active meeting
@@ -299,6 +303,23 @@ export default function MentorDashboard() {
   }
 
   const filteredSessions = sessions.filter(s => statusFilter === 'all' || s.status === statusFilter)
+  const [requests, setRequests] = useState([])
+  const [requestsLoaded, setRequestsLoaded] = useState(false)
+
+  useEffect(() => {
+    if (profile?.email) fetchRequests()
+  }, [profile])
+
+  async function fetchRequests() {
+    const { data } = await supabase.from('meeting_requests').select('id,status,requested_date,requested_slot,mentee_name,company_name')
+      .eq('mentor_email', profile.email)
+      .order('created_at', { ascending: false })
+    setRequests(data || [])
+    setRequestsLoaded(true)
+  }
+
+  const pendingRequests = requests.filter(r => r.status === 'pending')
+  const upcomingMeetings = requests.filter(r => r.status === 'accepted')
 
   return (
     <div className="md-wrap">
@@ -307,7 +328,7 @@ export default function MentorDashboard() {
           <div className="md-logo">M<em>S</em></div>
           <div>
             <div className="md-greeting">Good {hour()}, {profile?.full_name?.split(' ')[0]} 👋</div>
-            <div className="md-role-chip">🎓 Mentor</div>
+            <div className="md-role-chip">{profile?.role === 'venture_partner' ? '🚀 Venture Partner' : '🎓 Mentor'}</div>
           </div>
         </div>
         <div className="md-top-right">
@@ -339,31 +360,48 @@ export default function MentorDashboard() {
           {!selectedMentee ? (
             <>
               <div className="md-stats">
-                <div className={`md-stat md-stat-clickable ${statusFilter==='all'?'active':''}`} onClick={()=>setStatusFilter('all')}>
+                <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='all'?'active':''}`}
+                  onClick={()=>{ setMainTab('sessions'); setStatusFilter('all') }}>
                   <div className="md-stat-val">{sessions.length}</div>
                   <div className="md-stat-label">All Sessions</div>
                 </div>
-                <div className={`md-stat md-stat-clickable ${statusFilter==='active'?'active':''}`} onClick={()=>setStatusFilter('active')}>
+                <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='active'?'active':''}`}
+                  onClick={()=>{ setMainTab('sessions'); setStatusFilter('active') }}>
                   <div className="md-stat-val">{sessions.filter(s=>s.status==='active').length}</div>
-                  <div className="md-stat-label">Active</div>
+                  <div className="md-stat-label">In Progress</div>
                 </div>
-                <div className={`md-stat md-stat-clickable ${statusFilter==='ended'?'active':''}`} onClick={()=>setStatusFilter('ended')}>
+                <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='ended'?'active':''}`}
+                  onClick={()=>{ setMainTab('sessions'); setStatusFilter('ended') }}>
                   <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
                   <div className="md-stat-label">Completed</div>
                 </div>
-                <div className="md-stat">
-                  <div className="md-stat-val">{mentees.length}</div>
-                  <div className="md-stat-label">Mentees</div>
+
+                <div className={`md-stat md-stat-clickable md-stat-pending ${mainTab==='requests'?'active':''}`}
+                  onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
+                  <div className="md-stat-val md-stat-val-pending">{pendingRequests.length}</div>
+                  <div className="md-stat-label">Pending Requests</div>
                 </div>
-                <div className="md-stat">
-                  <div className="md-stat-val">{insights.length}</div>
-                  <div className="md-stat-label">Insights</div>
+                <div className={`md-stat md-stat-clickable md-stat-upcoming ${mainTab==='requests'?'active':''}`}
+                  onClick={()=>{ setMainTab('requests'); setRequestsFilter('accepted') }}>
+                  <div className="md-stat-val md-stat-val-upcoming">{upcomingMeetings.length}</div>
+                  <div className="md-stat-label">Upcoming Meetings</div>
                 </div>
               </div>
 
-              {loading ? <div className="md-loading">Loading…</div> :
-               filteredSessions.length === 0 ? <div className="md-empty">No sessions found.</div> :
-               filteredSessions.map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
+              <div className="md-main-tabs">
+                <button className={`md-main-tab ${mainTab==='sessions'?'active':''}`} onClick={()=>setMainTab('sessions')}>📋 Completed Meetings</button>
+                <button className={`md-main-tab ${mainTab==='requests'?'active':''}`} onClick={()=>setMainTab('requests')}>📬 Meeting Requests</button>
+                <button className={`md-main-tab ${mainTab==='availability'?'active':''}`} onClick={()=>setMainTab('availability')}>📅 My Availability</button>
+              </div>
+              <div style={{display: mainTab==='sessions' ? 'block' : 'none'}}>
+                {loading ? <div className="md-loading">Loading…</div> : filteredSessions.length === 0 ? <div className="md-empty">No sessions found.</div> : filteredSessions.map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
+              </div>
+              <div style={{display: mainTab==='requests' ? 'block' : 'none'}}>
+                <MentorRequestsTab embedded initialFilter={requestsFilter} />
+              </div>
+              <div style={{display: mainTab==='availability' ? 'block' : 'none'}}>
+                <MentorAvailabilityTab embedded />
+              </div>
             </>
           ) : (
             <MenteeDetail mentee={selectedMentee} sessions={sessions} insights={insights}

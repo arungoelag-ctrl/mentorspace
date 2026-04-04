@@ -68,6 +68,14 @@ export default function Signup() {
             <span className="role-pick-label">I'm a Mentee</span>
             <span className="role-pick-sub">I want to learn</span>
           </button>
+          <button
+            className={`role-pick-btn ${form.role === 'venture_partner' ? 'active' : ''}`}
+            onClick={() => setForm(f => ({ ...f, role: 'venture_partner' }))} type="button"
+          >
+            <span className="role-pick-icon">🚀</span>
+            <span className="role-pick-label">I'm a Venture Partner</span>
+            <span className="role-pick-sub">I guide ventures</span>
+          </button>
         </div>
 
         <form onSubmit={handleSignup}>

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 import TranscriptViewer from './TranscriptViewer'
+import MenteeRequestsTab from './MenteeRequests'
+import DiscoverMentorsTab from './DiscoverMentors'
 import './MenteeDashboard.css'
 
 function hour() {
@@ -29,7 +31,7 @@ function SessionCard({ session, insights }) {
             </div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <div className={`md-session-status ${session.status}`}>{session.status}</div>
+            <div className={`md-session-status ${session.status}`}>{session.status === 'ended' ? 'completed' : session.status === 'active' ? 'in progress' : session.status}</div>
             <span style={{color:'#6b6f94',fontSize:12}}>{expanded ? '▲' : '▼'}</span>
           </div>
         </div>
@@ -91,6 +93,8 @@ export default function MenteeDashboard() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeView, setActiveView] = useState('sessions')
+  const [mainTab, setMainTab] = useState('sessions')
+  const [requestsFilter, setRequestsFilter] = useState('pending')
   const [joinId, setJoinId] = useState('')
   const [joinPw, setJoinPw] = useState('')
 
@@ -128,6 +132,18 @@ export default function MenteeDashboard() {
 
   const finalInsights = insights.filter(i => i.is_final)
   const uniqueMentors = [...new Set(sessions.map(s => s.mentor_name).filter(Boolean))]
+  const [menteeRequests, setMenteeRequests] = useState([])
+
+  useEffect(() => { if (user) fetchMenteeRequests() }, [user])
+
+  async function fetchMenteeRequests() {
+    const { data } = await supabase.from('meeting_requests').select('id,status')
+      .eq('mentee_email', user?.email)
+    setMenteeRequests(data || [])
+  }
+
+  const pendingRequests = menteeRequests.filter(r => r.status === 'pending')
+  const upcomingMeetings = menteeRequests.filter(r => r.status === 'accepted')
 
   return (
     <div className="mentee-wrap">
@@ -148,25 +164,30 @@ export default function MenteeDashboard() {
       <div className="mentee-body">
         {/* Stats */}
         <div className="md-stats">
-          <div className={`md-stat md-stat-clickable ${statusFilter==='all'?'active':''}`} onClick={()=>setStatusFilter('all')}>
+          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='all'?'active':''}`}
+            onClick={()=>{ setMainTab('sessions'); setStatusFilter('all') }}>
             <div className="md-stat-val">{sessions.length}</div>
             <div className="md-stat-label">All Sessions</div>
           </div>
-          <div className={`md-stat md-stat-clickable ${statusFilter==='active'?'active':''}`} onClick={()=>setStatusFilter('active')}>
+          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='active'?'active':''}`}
+            onClick={()=>{ setMainTab('sessions'); setStatusFilter('active') }}>
             <div className="md-stat-val">{sessions.filter(s=>s.status==='active').length}</div>
-            <div className="md-stat-label">Active</div>
+            <div className="md-stat-label">In Progress</div>
           </div>
-          <div className={`md-stat md-stat-clickable ${statusFilter==='ended'?'active':''}`} onClick={()=>setStatusFilter('ended')}>
+          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='ended'?'active':''}`}
+            onClick={()=>{ setMainTab('sessions'); setStatusFilter('ended') }}>
             <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
             <div className="md-stat-label">Completed</div>
           </div>
-          <div className="md-stat">
-            <div className="md-stat-val">{uniqueMentors.length}</div>
-            <div className="md-stat-label">Mentors</div>
+          <div className={`md-stat md-stat-clickable md-stat-pending ${mainTab==='requests'&&requestsFilter==='pending'?'active':''}`}
+            onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
+            <div className="md-stat-val md-stat-val-pending">{pendingRequests.length}</div>
+            <div className="md-stat-label">Pending Requests</div>
           </div>
-          <div className="md-stat">
-            <div className="md-stat-val">{finalInsights.length}</div>
-            <div className="md-stat-label">AI Insights</div>
+          <div className={`md-stat md-stat-clickable md-stat-upcoming ${mainTab==='requests'&&requestsFilter==='accepted'?'active':''}`}
+            onClick={()=>{ setMainTab('requests'); setRequestsFilter('accepted') }}>
+            <div className="md-stat-val md-stat-val-upcoming">{upcomingMeetings.length}</div>
+            <div className="md-stat-label">Upcoming Meetings</div>
           </div>
         </div>
 
@@ -186,79 +207,25 @@ export default function MenteeDashboard() {
           </div>
         </div>
 
-        {/* View tabs */}
-        <div className="mentee-view-tabs">
-          <button className={`mentee-view-tab ${activeView==='sessions'?'active':''}`} onClick={()=>setActiveView('sessions')}>
-            📋 Session History & Summaries
-          </button>
-          <button className={`mentee-view-tab ${activeView==='progress'?'active':''}`} onClick={()=>setActiveView('progress')}>
-            📈 My Progress
-          </button>
+        <div className="md-main-tabs">
+          <button className={`md-main-tab ${mainTab==='sessions'?'active':''}`} onClick={()=>setMainTab('sessions')}>📋 Completed Meetings</button>
+          <button className={`md-main-tab ${mainTab==='requests'?'active':''}`} onClick={()=>setMainTab('requests')}>📬 My Requests</button>
+          <button className={`md-main-tab ${mainTab==='discover'?'active':''}`} onClick={()=>setMainTab('discover')}>🔍 Find a Mentor</button>
         </div>
 
-        {activeView === 'sessions' && (
+        <div style={{display: mainTab==='sessions' ? 'block' : 'none'}}>
           <div className="mentee-sessions-list">
-
             {loading ? <div className="md-loading">Loading…</div> :
              sessions.length === 0 ? <div className="md-empty">No sessions yet.<br/>Use the Join box above when your mentor shares a Meeting ID.</div> :
              sessions.filter(s => statusFilter === 'all' || s.status === statusFilter).map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
           </div>
-        )}
-
-        {activeView === 'progress' && (
-          <div className="mentee-progress-view">
-            <div className="mentee-progress-col">
-              <div className="md-section-title">My Mentors</div>
-              {uniqueMentors.length === 0 ? <div className="md-empty">No mentors yet.</div> :
-               uniqueMentors.map(mentor => {
-                const ms = sessions.filter(s => s.mentor_name === mentor)
-                const topics = [...new Set(ms.map(s=>s.topic).filter(Boolean))]
-                return (
-                  <div key={mentor} className="mentee-mentor-card">
-                    <div className="mentee-mentor-avatar">{mentor.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
-                    <div>
-                      <div className="mentee-mentor-name">{mentor}</div>
-                      <div className="mentee-mentor-meta">{ms.length} session{ms.length!==1?'s':''}</div>
-                      <div className="mentee-mentor-topics">
-                        {topics.slice(0,3).map(t=><span key={t} className="mentee-topic-tag">{t}</span>)}
-                      </div>
-                    </div>
-                  </div>
-                )
-               })}
-            </div>
-
-            <div className="mentee-progress-col">
-              <div className="md-section-title">AI Insights History</div>
-              {finalInsights.length === 0 ? (
-                <div className="md-empty">No insights yet. Complete a session to see AI summaries here.</div>
-              ) : finalInsights.map(ins => {
-                const session = sessions.find(s => s.meeting_id === ins.session_id)
-                return (
-                  <div key={ins.id} className="mentee-insight-card">
-                    <div className="mentee-insight-card-header">
-                      <span>{session?.topic || 'Session'}</span>
-                      <span className="mentee-insight-date">
-                        {new Date(ins.snapshot_time).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
-                      </span>
-                    </div>
-                    <div className="mentee-insight-card-text">{ins.summary}</div>
-                    {ins.questions?.length > 0 && (
-                      <div className="mentee-insight-card-qs">
-                        <div style={{fontSize:10,fontFamily:'monospace',color:'#6b6f94',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Questions for next</div>
-                        {ins.questions.slice(0,3).map((q,i) => (
-                          <div key={i} style={{fontSize:12,color:'var(--text)',padding:'4px 0',borderBottom:'1px solid var(--border)',display:'flex',gap:8}}>
-                            <span style={{color:'var(--accent)',fontWeight:700,flexShrink:0}}>{i+1}.</span><span>{q}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
+        </div>
+        <div style={{display: mainTab==='requests' ? 'block' : 'none'}}>
+          <MenteeRequestsTab embedded initialFilter={requestsFilter} />
+        </div>
+        <div style={{display: mainTab==='discover' ? 'block' : 'none'}}>
+          <DiscoverMentorsTab embedded />
+        </div>
       </div>
     </div>
   )

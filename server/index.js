@@ -152,12 +152,14 @@ app.post('/api/intelligence/generate', async (req, res) => {
     const { summaries, sessionCount } = req.body
     const text = await callClaude(`You are a market intelligence analyst for Wadhwani Foundation, which runs mentoring programs for entrepreneurs and businesses across India and emerging markets.
 
-You have access to summaries from ${sessionCount} mentoring sessions. Extract market intelligence cards from these transcripts.
+You have access to summaries from ${sessionCount} mentoring sessions. Ignore sessions that are purely technical tests with zero business content.
 
 Session summaries:
 ${summaries}
 
-Generate 6-8 market intelligence cards covering different sectors, themes and geographies found in the data. Each card should represent a distinct insight about markets, competition, challenges, or opportunities discussed.
+From the real business content above, generate exactly 8 market intelligence cards. Spread them across DIFFERENT sectors and themes - do not generate more than 2 cards for any single sector. Cover the full range of businesses and topics discussed: healthcare, export, manufacturing, GTM strategy, market expansion, scaling, fundraising, distribution - whatever is present in the data.
+
+Each card must be about a DIFFERENT insight. Vary the sectors, geographies and themes across all 8 cards.
 
 Respond ONLY with valid JSON array:
 [
@@ -176,11 +178,129 @@ Respond ONLY with valid JSON array:
   }
 ]`)
 
-    const cards = JSON.parse(text.trim())
+    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    const cards = JSON.parse(clean)
     const dated = cards.map(card => ({ ...card, created_at: new Date().toISOString() }))
     res.json({ cards: dated })
   } catch (err) {
     console.error('Intelligence generate error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+
+// ─── ENHANCED BRIEF WITH CONTEXT ─────────────────────────────────────────────
+app.get('/api/brief-with-context/:menteeName', async (req, res) => {
+  try {
+    const menteeName = decodeURIComponent(req.params.menteeName)
+    const { companyName, companyUrl, stage, goal, mentorEmail } = req.query
+
+    // Get past sessions filtered by both mentee and mentor
+    let sessionQuery = supabase
+      .from('sessions').select('*')
+      .eq('mentee_name', menteeName)
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+    if (mentorEmail) sessionQuery = sessionQuery.eq('mentor_email', mentorEmail)
+    const { data: sessions } = await sessionQuery
+
+    const sessionIds = (sessions || []).map(s => s.meeting_id)
+
+    // Get final insights for those sessions
+    const { data: insights } = sessionIds.length > 0
+      ? await supabase.from('session_insights').select('*')
+          .in('session_id', sessionIds)
+          .eq('is_final', true)
+          .order('snapshot_time', { ascending: false })
+      : { data: [] }
+
+    // Get recent transcripts (last 3 sessions)
+    const { data: transcripts } = sessionIds.length > 0
+      ? await supabase.from('session_transcripts').select('*')
+          .in('session_id', sessionIds.slice(0, 3))
+      : { data: [] }
+
+    // Build session history text
+    const sessionHistory = (insights || []).map((ins, i) => {
+      const session = (sessions || []).find(s => s.meeting_id === ins.session_id)
+      const date = session?.ended_at
+        ? new Date(session.ended_at).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'})
+        : 'Unknown date'
+      return `SESSION ${i+1} — ${date} (Topic: ${session?.topic || 'General'})
+Summary: ${ins.summary}
+Action items / questions flagged: ${(ins.questions || []).join(' | ')}`
+    }).join('\n\n')
+
+    // Build transcript excerpts
+    const transcriptExcerpts = (transcripts || []).map((t, i) => {
+      const lines = (t.lines || []).slice(-20)
+      return `--- Transcript excerpt (session ${i+1}) ---\n` + lines.map(l => `${l.name}: ${l.text}`).join('\n')
+    }).join('\n\n')
+
+    const hasPastSessions = (sessions || []).length > 0
+
+    const prompt = `You are preparing a pre-meeting brief for a mentor at Wadhwani Foundation about their upcoming session with a mentee.
+
+=== MENTEE: ${menteeName} ===
+Past sessions with this mentor: ${hasPastSessions ? sessions.length : 0}
+
+=== UPCOMING MEETING REQUEST ===
+Company: ${companyName || 'Not provided'}
+Company URL: ${companyUrl || 'Not provided'}
+Stage: ${stage || 'Not provided'}
+What mentee wants to achieve: ${goal || 'Not provided'}
+
+${hasPastSessions ? `=== PAST SESSION HISTORY ===
+${sessionHistory}
+
+=== RECENT TRANSCRIPT EXCERPTS ===
+${transcriptExcerpts || 'No transcript data available.'}` : '=== NO PAST SESSIONS ===\nThis is the first meeting with this mentee.'}
+
+Generate a thorough pre-meeting brief. Rules:
+- action_items: scan ALL past session transcripts and summaries for anything the mentee said they would do, or the mentor asked them to do, that has NOT been confirmed completed. Be specific. If no past sessions, return [].
+- red_flags: note inconsistencies between sessions, unrealistic claims, or concerns from the meeting request itself. If none, return [].
+- brief_text: 3 paragraphs. First: who this mentee is and their journey so far (or intro if first session). Second: what they want from this meeting and your read on it. Third: recommended focus for the session.
+- key_questions: 5 sharp, specific questions tailored to their stage (${stage}) and goal. Not generic.
+- focus_areas: 3 specific things to cover in this session.
+- progress_summary: 1-2 sentences on overall trajectory.
+
+Respond ONLY with valid JSON, no markdown fences:
+{
+  "brief_text": "...",
+  "action_items": ["specific outstanding action item 1", "item 2"],
+  "key_questions": ["sharp question 1", "question 2", "question 3", "question 4", "question 5"],
+  "progress_summary": "1-2 sentences",
+  "focus_areas": ["area 1", "area 2", "area 3"],
+  "red_flags": ["concern 1 if any"]
+}`
+
+    const text = await callClaude(prompt)
+    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    const parsed = JSON.parse(clean)
+
+    // Save to DB (upsert by mentee+mentor so it overwrites stale briefs)
+    try {
+      await supabase.from('pre_meeting_briefs').upsert({
+        mentee_name: menteeName,
+        mentor_email: mentorEmail || null,
+        brief_text: parsed.brief_text,
+        action_items: parsed.action_items,
+        key_questions: parsed.key_questions,
+        red_flags: parsed.red_flags,
+        focus_areas: parsed.focus_areas,
+        progress_summary: parsed.progress_summary,
+        company_stage: stage || null,
+        created_at: new Date()
+      }, { onConflict: 'mentee_name,mentor_email' })
+    } catch(e) { console.log('Brief save skipped:', e.message) }
+
+    res.json({
+      brief: { ...parsed, created_at: new Date() },
+      sessions: sessions || [],
+      sessionCount: (sessions || []).length
+    })
+  } catch (err) {
+    console.error('Brief with context error:', err)
     res.status(500).json({ error: err.message })
   }
 })

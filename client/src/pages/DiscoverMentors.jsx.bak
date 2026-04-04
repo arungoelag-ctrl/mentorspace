@@ -1,0 +1,219 @@
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabase'
+import './DiscoverMentors.css'
+
+const COLORS = ['#6c74f7','#e8b84b','#1aad6a','#c792ea','#e03535','#4fc3f7']
+const STAGES = [
+  { value: 'Validation (Pre-revenue, prototype, or MVP stage)', label: 'Validation', sub: 'Pre-revenue, prototype, or MVP stage' },
+  { value: 'Traction (Pilot customers, early revenue, or initial market adoption)', label: 'Traction', sub: 'Pilot customers, early revenue, or initial market adoption' },
+  { value: 'Scaling (Expanding into new markets and/or preparing for funding)', label: 'Scaling', sub: 'Expanding into new markets and/or preparing for funding' },
+]
+
+export default function DiscoverMentors() {
+  const { profile, user } = useAuth()
+  const navigate = useNavigate()
+  const [mentors, setMentors] = useState([])
+  const [availability, setAvailability] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [selectedAvail, setSelectedAvail] = useState(null)
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [form, setForm] = useState({ companyInfo: '', companyUrl: '', stage: '', goal: '' })
+
+  useEffect(() => { fetchData() }, [])
+
+  async function fetchData() {
+    setLoading(true)
+    try {
+      const { data: mentorData } = await supabase.from('profiles').select('*').eq('role', 'mentor')
+      setMentors(mentorData || [])
+      const today = new Date().toISOString().split('T')[0]
+      const { data: availData } = await supabase.from('mentor_availability').select('*')
+        .gte('date', today).order('date', { ascending: true })
+      setAvailability(availData || [])
+    } finally { setLoading(false) }
+  }
+
+  function getMentorAvailability(mentorEmail) {
+    return availability.filter(a => a.mentor_email === mentorEmail && a.slots.some(s => !s.booked))
+  }
+
+  async function submitRequest() {
+    if (!form.companyInfo || !form.stage || !form.goal) return
+    setSubmitting(true)
+    try {
+      const { error } = await supabase.from('meeting_requests').insert({
+        mentee_id: user?.id,
+        mentee_name: profile?.full_name,
+        mentee_email: user?.email,
+        mentor_id: selected.id,
+        mentor_name: selected.full_name,
+        mentor_email: selected.email,
+        requested_date: selectedAvail.date,
+        requested_slot: selectedSlot,
+        timezone: selectedAvail.timezone,
+        company_name: form.companyInfo,
+        company_url: form.companyUrl,
+        company_stage: form.stage,
+        meeting_goal: form.goal,
+        status: 'pending'
+      })
+      if (error) throw error
+      setSubmitted(true)
+      setShowForm(false)
+    } finally { setSubmitting(false) }
+  }
+
+  if (submitted) return (
+    <div className="discover-wrap">
+      <div className="discover-success">
+        <div className="discover-success-icon">✓</div>
+        <h2>Request Sent!</h2>
+        <p>Your meeting request has been sent to <strong>{selected?.full_name}</strong>.</p>
+        <p className="discover-success-sub">You'll be notified when they respond.</p>
+        <div style={{display:'flex',gap:12,marginTop:24,justifyContent:'center'}}>
+          <button className="discover-btn-primary" onClick={() => navigate('/mentee-requests')}>View My Requests</button>
+          <button className="discover-btn-ghost" onClick={() => navigate('/')}>← Dashboard</button>
+        </div>
+      </div>
+    </div>
+  )
+
+
+
+  return (
+    <div className="discover-wrap">
+      <div className="discover-header">
+        <button className="avail-back" onClick={() => navigate('/')}>← Dashboard</button>
+        <div>
+          <div className="avail-title">Discover Mentors</div>
+          <div className="avail-sub">Browse mentors and book a meeting at a time that works for you</div>
+        </div>
+      </div>
+
+      {loading ? <div className="avail-loading">Loading mentors…</div> : (
+        <div className="discover-grid">
+          {mentors.map((mentor, i) => {
+            const mentorAvail = getMentorAvailability(mentor.email)
+            return (
+              <div key={mentor.id}
+                className={`discover-mentor-card ${selected?.id === mentor.id ? 'selected' : ''}`}
+                onClick={() => { setSelected(mentor); setSelectedAvail(null); setSelectedSlot(null) }}>
+                <div className="discover-mentor-top">
+                  <div className="discover-mentor-avatar" style={{background: COLORS[i % COLORS.length]}}>
+                    {mentor.full_name.split(' ').map(n=>n[0]).join('').slice(0,2)}
+                  </div>
+                  <div>
+                    <div className="discover-mentor-name">{mentor.full_name}</div>
+                    <div className="discover-mentor-email">{mentor.email}</div>
+                  </div>
+                  {mentorAvail.length > 0
+                    ? <span className="discover-avail-badge">{mentorAvail.length} date{mentorAvail.length!==1?'s':''} available</span>
+                    : <span className="discover-no-avail">No availability</span>}
+                </div>
+
+                {selected?.id === mentor.id && (
+                  <div className="discover-slots-section" onClick={e => e.stopPropagation()}>
+                    {mentorAvail.length === 0 ? (
+                      <div className="discover-no-slots">This mentor hasn't set availability yet.</div>
+                    ) : (
+                      <>
+                        <div className="discover-slots-label">Select a date and time:</div>
+                        {mentorAvail.map(avail => (
+                          <div key={avail.id} className="discover-date-row">
+                            <div className="discover-date-name">
+                              {new Date(avail.date + 'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                              <span className="discover-tz"> ({avail.timezone})</span>
+                            </div>
+                            <div className="discover-time-slots">
+                              {avail.slots.filter(s=>!s.booked).map((slot,si) => (
+                                <button key={si}
+                                  className={`discover-time-btn ${selectedAvail?.id===avail.id && selectedSlot?.start===slot.start ? 'selected':''}`}
+                                  onClick={() => { setSelectedAvail(avail); setSelectedSlot(slot) }}>
+                                  {slot.start}–{slot.end}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {selectedSlot && (
+                          <button className="discover-btn-primary" style={{marginTop:14}}
+                            onClick={e => { e.stopPropagation(); console.log('Continue clicked, showForm will be true'); setShowForm(true); console.log('setShowForm called') }}>
+                            Continue with {selectedSlot.start}–{selectedSlot.end} →
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {showForm && (
+        <div className="discover-modal-overlay" onClick={e => { if(e.target===e.currentTarget) setShowForm(false) }} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+          <div className="discover-modal" style={{background:'#fff',borderRadius:'16px',width:'100%',maxWidth:'540px',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.2)',overflow:'hidden'}}>
+            <div className="discover-modal-header">
+              <div>
+                <div className="discover-modal-title">Request a Meeting</div>
+                <div className="discover-modal-sub">
+                  with {selected?.full_name} &nbsp;·&nbsp;
+                  {new Date(selectedAvail?.date + 'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})} &nbsp;·&nbsp;
+                  {selectedSlot?.start}–{selectedSlot?.end}
+                </div>
+              </div>
+              <button className="discover-modal-close" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <div className="discover-modal-body" style={{padding:'24px 28px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'20px'}}>
+              <div className="discover-field">
+                <label className="discover-field-label">Company Information *</label>
+                <textarea className="discover-field-input discover-field-textarea"
+                  placeholder="Tell us about your company — what you do, your market, and your business model…"
+                  rows={3} value={form.companyInfo}
+                  onChange={e => setForm(f => ({...f, companyInfo: e.target.value}))} />
+              </div>
+              <div className="discover-field">
+                <label className="discover-field-label">Company URL</label>
+                <input className="discover-field-input"
+                  placeholder="https://yourcompany.com"
+                  value={form.companyUrl}
+                  onChange={e => setForm(f => ({...f, companyUrl: e.target.value}))} />
+              </div>
+              <div className="discover-field">
+                <label className="discover-field-label">What stage is your company currently in? *</label>
+                <select className="discover-field-input discover-field-select"
+                  value={form.stage}
+                  onChange={e => setForm(f => ({...f, stage: e.target.value}))}>
+                  <option value="">Select your stage…</option>
+                  {STAGES.map(s => (
+                    <option key={s.value} value={s.value}>{s.label} — {s.sub}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="discover-field">
+                <label className="discover-field-label">What do you expect to achieve from this meeting? *</label>
+                <textarea className="discover-field-input discover-field-textarea"
+                  placeholder="Describe what you'd like to discuss and what outcomes you're hoping for…"
+                  rows={4} value={form.goal}
+                  onChange={e => setForm(f => ({...f, goal: e.target.value}))} />
+              </div>
+            </div>
+            <div className="discover-modal-footer">
+              <button className="discover-modal-cancel" onClick={() => setShowForm(false)}>← Back</button>
+              <button className="discover-modal-submit" onClick={submitRequest}
+                disabled={submitting || !form.companyInfo || !form.stage || !form.goal}>
+                {submitting ? '⏳ Sending…' : '📨 Send Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

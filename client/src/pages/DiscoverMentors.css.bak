@@ -1,0 +1,38 @@
+.discover-wrap { min-height: 100vh; background: var(--bg); padding: 28px; }
+.discover-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.discover-grid { display: flex; flex-direction: column; gap: 14px; }
+.discover-mentor-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+.discover-mentor-card:hover { border-color: var(--border2); }
+.discover-mentor-card.selected { border-color: var(--accent); }
+.discover-mentor-top { display: flex; align-items: center; gap: 14px; }
+.discover-mentor-avatar { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.discover-mentor-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.discover-mentor-email { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.discover-avail-badge { margin-left: auto; font-size: 11px; font-family: var(--font-mono); background: rgba(61,214,140,0.1); color: var(--green); border: 1px solid rgba(61,214,140,0.2); padding: 3px 10px; border-radius: 99px; }
+.discover-no-avail { margin-left: auto; font-size: 11px; font-family: var(--font-mono); color: var(--faint); }
+.discover-slots-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.discover-slots-label { font-size: 11px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+.discover-date-row { margin-bottom: 12px; }
+.discover-date-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.discover-tz { font-size: 11px; color: var(--faint); font-family: var(--font-mono); font-weight: 400; }
+.discover-time-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.discover-time-btn { padding: 6px 14px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; font-size: 12px; font-family: var(--font-mono); cursor: pointer; transition: all 0.15s; }
+.discover-time-btn:hover { border-color: var(--accent); color: var(--accent); }
+.discover-time-btn.selected { background: rgba(108,116,247,0.12); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.discover-no-slots { font-size: 13px; color: var(--muted); padding: 12px 0; }
+.discover-btn-primary { padding: 10px 20px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.discover-btn-primary:hover { background: var(--accent-h); }
+.discover-btn-ghost { padding: 10px 20px; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; font-family: var(--font-body); font-size: 13px; cursor: pointer; }
+.discover-form-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; font-size: 13px; color: var(--accent); font-family: var(--font-mono); background: rgba(108,116,247,0.06); border: 1px solid rgba(108,116,247,0.15); border-radius: 8px; padding: 10px 14px; }
+.discover-stage-options { display: flex; flex-direction: column; gap: 8px; }
+.discover-stage-btn { padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; text-align: left; cursor: pointer; transition: all 0.15s; }
+.discover-stage-btn:hover { border-color: var(--accent); }
+.discover-stage-btn.selected { border-color: var(--accent); background: rgba(108,116,247,0.08); }
+.discover-stage-label { font-size: 14px; font-weight: 700; color: var(--text); }
+.discover-stage-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.discover-textarea { resize: vertical; min-height: 100px; }
+.discover-success { max-width: 480px; margin: 80px auto; text-align: center; }
+.discover-success-icon { width: 64px; height: 64px; border-radius: 50%; background: rgba(61,214,140,0.15); color: var(--green); font-size: 28px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+.discover-success h2 { font-family: var(--font-display); font-size: 24px; color: var(--text); margin-bottom: 10px; }
+.discover-success p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.discover-success-sub { font-size: 12px; color: var(--faint); }
