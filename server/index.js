@@ -193,7 +193,7 @@ Respond ONLY with valid JSON array:
 app.get('/api/brief-with-context/:menteeName', async (req, res) => {
   try {
     const menteeName = decodeURIComponent(req.params.menteeName)
-    const { companyName, companyUrl, stage, goal, mentorEmail } = req.query
+    const { companyName, companyUrl, stage, goal, mentorEmail, requestId } = req.query
 
     // Get past sessions filtered by both mentee and mentor
     let sessionQuery = supabase
@@ -283,6 +283,7 @@ Respond ONLY with valid JSON, no markdown fences:
       await supabase.from('pre_meeting_briefs').upsert({
         mentee_name: menteeName,
         mentor_email: mentorEmail || null,
+        meeting_request_id: requestId || null,
         brief_text: parsed.brief_text,
         action_items: parsed.action_items,
         key_questions: parsed.key_questions,

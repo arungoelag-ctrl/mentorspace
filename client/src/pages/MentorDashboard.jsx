@@ -332,6 +332,7 @@ export default function MentorDashboard() {
           </div>
         </div>
         <div className="md-top-right">
+          <button className="md-intel-btn" onClick={() => { setMainTab('availability') }}>📅 My Availability</button>
           <button className="md-intel-btn" onClick={() => navigate('/intelligence')}>📊 Market Intelligence</button>
           <button className="md-new-btn" onClick={() => navigate('/new')}>+ New Session</button>
           <button className="md-signout" onClick={signOut}>Sign out</button>
@@ -354,6 +355,19 @@ export default function MentorDashboard() {
               </div>
             </div>
           ))}
+          <div className="mentee-sidebar-divider" style={{margin:'12px 0',borderTop:'1px solid var(--border)'}} />
+          <div className="md-sidebar-title">Quick Access</div>
+          <div className={`md-mentee-row ${mainTab==='requests'?'active':''}`} onClick={() => { setMainTab('requests'); setRequestsFilter('pending') }}>
+            <div className="mentee-nav-icon">📬</div>
+            <div>
+              <div className="md-mentee-name">Meeting Requests</div>
+              {pendingRequests.length > 0 && <div className="md-mentee-meta" style={{color:'#e8b84b'}}>{pendingRequests.length} pending</div>}
+            </div>
+          </div>
+          <div className={`md-mentee-row ${mainTab==='availability'?'active':''}`} onClick={() => setMainTab('availability')}>
+            <div className="mentee-nav-icon">📅</div>
+            <div className="md-mentee-name">My Availability</div>
+          </div>
         </div>
 
         <div className="md-main">

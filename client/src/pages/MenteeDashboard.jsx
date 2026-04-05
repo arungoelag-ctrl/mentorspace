@@ -156,12 +156,40 @@ export default function MenteeDashboard() {
           </div>
         </div>
         <div className="md-top-right">
+          <button className="md-intel-btn" onClick={() => setMainTab('discover')}>🔍 Find a Mentor</button>
           <button className="md-intel-btn" onClick={() => navigate('/intelligence')}>📊 Market Intelligence</button>
           <button className="md-signout" onClick={signOut}>Sign out</button>
         </div>
       </div>
 
       <div className="mentee-body">
+        <div className="mentee-sidebar">
+          <div className="md-sidebar-title">My Mentors</div>
+          {uniqueMentors.length === 0 ? <div className="md-empty" style={{fontSize:12,padding:'8px'}}>No mentors yet.</div> :
+           uniqueMentors.map(mentor => (
+            <div key={mentor} className="md-mentee-row" onClick={() => setMainTab('sessions')}>
+              <div className="md-mentee-avatar">{mentor.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+              <div>
+                <div className="md-mentee-name">{mentor}</div>
+                <div className="md-mentee-meta">{sessions.filter(s=>s.mentor_name===mentor).length} session{sessions.filter(s=>s.mentor_name===mentor).length!==1?'s':''}</div>
+              </div>
+            </div>
+          ))}
+          <div className="mentee-sidebar-divider" />
+          <div className="md-sidebar-title">Navigation</div>
+          <div className={`md-mentee-row ${mainTab==='requests'?'active':''}`} onClick={() => { setMainTab('requests'); setRequestsFilter('pending') }}>
+            <div className="mentee-nav-icon">📬</div>
+            <div>
+              <div className="md-mentee-name">My Requests</div>
+              {pendingRequests.length > 0 && <div className="md-mentee-meta" style={{color:'#e8b84b'}}>{pendingRequests.length} pending</div>}
+            </div>
+          </div>
+          <div className={`md-mentee-row ${mainTab==='discover'?'active':''}`} onClick={() => setMainTab('discover')}>
+            <div className="mentee-nav-icon">🔍</div>
+            <div className="md-mentee-name">Find a Mentor</div>
+          </div>
+        </div>
+        <div className="mentee-main">
         {/* Stats */}
         <div className="md-stats">
           <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='all'?'active':''}`}
@@ -225,6 +253,7 @@ export default function MenteeDashboard() {
         </div>
         <div style={{display: mainTab==='discover' ? 'block' : 'none'}}>
           <DiscoverMentorsTab embedded />
+        </div>
         </div>
       </div>
     </div>

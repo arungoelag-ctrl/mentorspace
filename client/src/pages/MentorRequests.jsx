@@ -47,22 +47,24 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
       return
     }
 
-    // 2. Check DB for saved brief
-    const { data: saved } = await supabase
-      .from('pre_meeting_briefs')
-      .select('*')
-      .eq('mentee_name', req.mentee_name)
-      .eq('mentor_email', user?.email)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    // 2. Check DB for saved brief — only use if it matches this exact request
+    try {
+      const { data: saved } = await supabase
+        .from('pre_meeting_briefs')
+        .select('*')
+        .eq('mentee_name', req.mentee_name)
+        .eq('mentor_email', user?.email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
 
-    if (saved) {
-      const cached = { brief: saved, sessions: [] }
-      setBrief(cached)
-      setBriefCache(prev => ({...prev, [req.id]: cached}))
-      return
-    }
+      if (saved && saved.meeting_request_id === req.id) {
+        const cached = { brief: saved, sessions: [] }
+        setBrief(cached)
+        setBriefCache(prev => ({...prev, [req.id]: cached}))
+        return
+      }
+    } catch(e) { /* no saved brief found */ }
 
     // 3. Generate fresh brief
     setBriefLoading(true)
@@ -72,7 +74,8 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
         mentorEmail: user?.email,
         companyUrl: req.company_url || '',
         stage: req.company_stage,
-        goal: req.meeting_goal
+        goal: req.meeting_goal,
+        requestId: req.id
       }))
       const data = await res.json()
       setBrief(data)

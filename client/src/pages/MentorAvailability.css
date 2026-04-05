@@ -135,3 +135,12 @@
   background: rgba(26,173,106,0.10);
   border-left: 3px solid rgba(26,173,106,0.4);
 }
+
+/* ── Embedded toolbar (save button when header hidden) ────────── */
+.avail-embedded-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 12px;
+}

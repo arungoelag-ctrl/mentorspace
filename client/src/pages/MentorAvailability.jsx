@@ -33,7 +33,7 @@ export default function MentorAvailability({ embedded = false }) {
   const navigate = useNavigate()
   const [timezone, setTimezone] = useState('Asia/Kolkata')
   const [weekStart, setWeekStart] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d
+    const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() - d.getDay()); return d
   })
   const [selected, setSelected] = useState({})
   const [saved, setSaved] = useState({})
@@ -162,6 +162,16 @@ export default function MentorAvailability({ embedded = false }) {
           </button>
         </div>
       </div>}
+      {embedded && (
+        <div className="avail-embedded-toolbar">
+          <select className="avail-tz-select" value={timezone} onChange={e => setTimezone(e.target.value)}>
+            {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+          </select>
+          <button className="avail-save-btn" onClick={saveAvailability} disabled={saving}>
+            {saving ? '⏳ Saving…' : `Save (${totalSlots} slots)`}
+          </button>
+        </div>
+      )}
 
       <div className="avail-week-nav">
         <button className="avail-nav-btn" onClick={prevWeek}>←</button>
