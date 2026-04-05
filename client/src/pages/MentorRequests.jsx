@@ -89,7 +89,15 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
       const meetingRes = await fetch('/api/meetings/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: `${req.company_name} - ${req.company_stage}`, duration: 60, mentorName: profile?.full_name })
+        body: JSON.stringify({
+          topic: `${req.company_name} - ${req.company_stage}`,
+          duration: 60,
+          mentorName: profile?.full_name,
+          meetingType: 2,
+          startTime: req.requested_date && req.requested_slot?.start
+            ? `${req.requested_date}T${req.requested_slot.start}:00`
+            : null
+        })
       })
       const meeting = await meetingRes.json()
       await supabase.from('meeting_requests').update({

@@ -47,5 +47,6 @@ body {
 
 /* Zoom SDK override — force it to fill our container */
 #zmmtg-root { display: none; }
+#zmmtg-root.active { display: block !important; position: fixed !important; inset: 0 !important; z-index: 9000 !important; background: #000; }
 .meeting-client { position: relative !important; }
 .meeting-client-inner { position: relative !important; }

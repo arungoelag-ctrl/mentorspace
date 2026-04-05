@@ -40,7 +40,7 @@ app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOStri
 // ─── CREATE A ZOOM MEETING ─────────────────────────────────────────────────────
 app.post('/api/meetings/create', async (req, res) => {
   try {
-    const { topic, duration = 60, mentorName = 'Mentor' } = req.body;
+    const { topic, duration = 60, mentorName = 'Mentor', meetingType = 1, startTime = null } = req.body;
     const token = await getAccessToken();
 
     const meetRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
@@ -51,7 +51,8 @@ app.post('/api/meetings/create', async (req, res) => {
       },
       body: JSON.stringify({
         topic: topic || `MentorSpace: ${mentorName} Session`,
-        type: 1, // Instant meeting
+        type: meetingType,
+        ...(startTime ? { start_time: startTime, timezone: 'Asia/Kolkata' } : meetingType === 2 ? { start_time: new Date(Date.now() + 60000).toISOString(), timezone: 'Asia/Kolkata' } : {}),
         duration,
         settings: {
           join_before_host: true,
