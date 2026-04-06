@@ -1,17 +1,17 @@
 .pmb-wrap {
   height: 100%;
   overflow-y: auto;
-  background: #0f1119;
+  background: var(--card);
 }
 .pmb-wrap.compact { font-size: 13px; }
 
 .pmb-loading {
   display: flex; align-items: center; justify-content: center;
-  gap: 12px; padding: 32px; color: #6b6f94; font-size: 13px;
+  gap: 12px; padding: 32px; color: var(--muted); font-size: 13px;
 }
 .pmb-spinner {
   width: 18px; height: 18px; border-radius: 50%;
-  border: 2px solid #1e2235; border-top-color: #6c74f7;
+  border: 2px solid #1e2235; border-top-color: var(--accent);
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -19,7 +19,7 @@
 .pmb-empty {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; text-align: center;
-  padding: 32px 24px; gap: 8px; color: #6b6f94; font-size: 13px;
+  padding: 32px 24px; gap: 8px; color: var(--muted); font-size: 13px;
   height: 100%;
 }
 .pmb-empty-icon { font-size: 36px; opacity: 0.5; margin-bottom: 8px; }
@@ -28,14 +28,14 @@
 .pmb-header {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 16px; border-bottom: 1px solid #1e2235;
-  position: sticky; top: 0; background: #0f1119; z-index: 10;
+  position: sticky; top: 0; background: var(--card); z-index: 10;
 }
 .pmb-icon { font-size: 18px; }
 .pmb-title {
-  font-size: 15px; font-weight: 700; color: #e6e8f4;
+  font-size: 15px; font-weight: 700; color: var(--text);
   font-family: 'Fraunces', serif; display: flex; align-items: center; gap: 6px;
 }
-.pmb-meta { font-size: 11px; color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }
+.pmb-meta { font-size: 11px; color: var(--muted); font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }
 .pmb-fresh {
   margin-left: 8px; color: #e8b84b;
   background: rgba(232,184,75,0.1); padding: 1px 8px;
@@ -43,16 +43,16 @@
 }
 .pmb-close {
   margin-left: auto; background: none; border: none;
-  color: #6b6f94; font-size: 14px; cursor: pointer; padding: 4px;
+  color: var(--muted); font-size: 14px; cursor: pointer; padding: 4px;
 }
-.pmb-close:hover { color: #e6e8f4; }
+.pmb-close:hover { color: var(--text); }
 
 .pmb-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
 .pmb-section { display: flex; flex-direction: column; gap: 8px; }
 .pmb-section-label {
   font-size: 10px; font-family: 'Consolas', 'Courier New', monospace;
-  color: #6b6f94; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
 }
 
 .pmb-progress {
@@ -63,15 +63,15 @@
 .pmb-progress-text { font-size: 13px; color: #3dd68c; line-height: 1.6; }
 
 .pmb-brief-text {
-  font-size: 13px; color: #e6e8f4; line-height: 1.7;
-  background: #141720; border: 1px solid #1e2235;
+  font-size: 13px; color: var(--text); line-height: 1.7;
+  background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px;
   white-space: pre-wrap;
 }
 
 .pmb-focus-areas { display: flex; flex-wrap: wrap; gap: 6px; }
 .pmb-focus-tag {
-  background: rgba(108,116,247,0.1); color: #6c74f7;
+  background: rgba(108,116,247,0.1); color: var(--accent);
   border: 1px solid rgba(108,116,247,0.2);
   padding: 4px 12px; border-radius: 99px;
   font-size: 12px; font-family: 'Consolas', 'Courier New', monospace;
@@ -83,11 +83,11 @@
   background: rgba(108,116,247,0.06);
   border: 1px solid rgba(108,116,247,0.15);
   border-radius: 10px; padding: 10px 12px;
-  font-size: 13px; color: #e6e8f4; line-height: 1.5;
+  font-size: 13px; color: var(--text); line-height: 1.5;
 }
 .pmb-q-num {
   width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(108,116,247,0.2); color: #6c74f7;
+  background: rgba(108,116,247,0.2); color: var(--accent);
   font-size: 10px; font-family: 'Consolas', 'Courier New', monospace; font-weight: 700;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
@@ -100,9 +100,18 @@
 .pmb-session-row:last-child { border-bottom: none; }
 .pmb-session-num {
   width: 24px; height: 24px; border-radius: 50%;
-  background: #1e2235; color: #6b6f94;
+  background: var(--border); color: var(--muted);
   font-size: 11px; font-family: 'Consolas', 'Courier New', monospace;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.pmb-session-topic { font-size: 13px; font-weight: 600; color: #e6e8f4; }
-.pmb-session-date { font-size: 11px; color: #6b6f94; font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }
+.pmb-session-topic { font-size: 13px; font-weight: 600; color: var(--text); }
+.pmb-session-date { font-size: 11px; color: var(--muted); font-family: 'Consolas', 'Courier New', monospace; margin-top: 2px; }
+
+/* ── Red Flags ────────────────────────────────────────────────── */
+.pmb-red-flags { background: rgba(240,96,96,0.05); border: 1px solid rgba(240,96,96,0.2); border-radius: 10px; padding: 12px 14px; }
+.pmb-flag-item { font-size: 12px; color: var(--red); padding: 3px 0; }
+
+/* ── Action Items ─────────────────────────────────────────────── */
+.pmb-action-items { background: rgba(26,173,106,0.05); border: 1px solid rgba(26,173,106,0.18); border-radius: 10px; padding: 12px 14px; }
+.pmb-action-item { display: flex; gap: 8px; font-size: 13px; color: var(--text); padding: 6px 0; border-bottom: 1px solid rgba(26,173,106,0.1); font-weight: 500; }
+.pmb-action-item:last-child { border-bottom: none; }

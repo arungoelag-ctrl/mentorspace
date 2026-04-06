@@ -219,6 +219,14 @@ export default function Session() {
   const [errMsg, setErrMsg] = useState('')
   const [copied, setCopied] = useState('')
   const [activeTab, setActiveTab] = useState('transcript')
+  const [briefData, setBriefData] = useState(null)
+  const [briefLoading, setBriefLoading] = useState(false)
+
+  const [actionTab, setActionTab] = useState('outstanding')
+  const [selectedActions, setSelectedActions] = useState([])
+  const [actionComments, setActionComments] = useState('')
+  const [savingActions, setSavingActions] = useState(false)
+  const [savedActions, setSavedActions] = useState(false)
   const [transcript, setTranscript] = useState([])
   const [insights, setInsights] = useState([])
   const [postMeetingSummary, setPostMeetingSummary] = useState(null)
@@ -229,6 +237,34 @@ export default function Session() {
   const [transcriptActive, setTranscriptActive] = useState(false)
 
   const role = profile?.role || 'mentor'
+
+  // Release devices if tab is closed without ending meeting
+  useEffect(() => {
+    const cleanup = () => {
+      try {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          .then(s => s.getTracks().forEach(t => t.stop())).catch(()=>{})
+      } catch(e) {}
+    }
+    window.addEventListener('beforeunload', cleanup)
+    return () => window.removeEventListener('beforeunload', cleanup)
+  }, [])
+
+  useEffect(() => {
+    if (role === 'mentor' && menteeName) {
+      setBriefLoading(true)
+      fetch('/api/brief-with-context/' + encodeURIComponent(menteeName) + '?' + new URLSearchParams({
+        mentorEmail: userEmail || '',
+        companyName: topic || '',
+        stage: '',
+        goal: ''
+      }))
+        .then(r => r.json())
+        .then(data => { if (data?.brief) setBriefData(data.brief) })
+        .catch(() => {})
+        .finally(() => setBriefLoading(false))
+    }
+  }, [role, menteeName])
   const initials = (profile?.full_name || 'AK').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 
   useEffect(() => {
@@ -424,6 +460,18 @@ export default function Session() {
         zoomRef.current?.leaveMeeting({})
       }
     } catch (e) { console.log('Leave error:', e) }
+
+    // Release camera and microphone back to OS
+    try {
+      const streams = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      streams.getTracks().forEach(track => track.stop())
+    } catch(e) {}
+    try {
+      document.querySelectorAll('video, audio').forEach(el => {
+        if (el.srcObject) { el.srcObject.getTracks().forEach(t => t.stop()); el.srcObject = null }
+      })
+    } catch(e) {}
+
     await handleEndMeeting()
     setPhase('ended')
   }
@@ -539,6 +587,11 @@ export default function Session() {
               ✨ AI Insights
             </button>
             {role === 'mentor' && (
+              <button className={'panel-tab ' + (activeTab === 'actions' ? 'active' : '')} onClick={() => setActiveTab('actions')}>
+                ✅ Action Items {briefData?.action_items?.filter(a=>a).length > 0 && <span className="tab-count">{briefData.action_items.filter(a=>a).length}</span>}
+              </button>
+            )}
+            {role === 'mentor' && (
               <button className={'panel-tab ' + (activeTab === 'brief' ? 'active' : '')} onClick={() => setActiveTab('brief')}>
                 📋 Brief
               </button>
@@ -546,7 +599,149 @@ export default function Session() {
           </div>
           {activeTab === 'transcript' && <TranscriptTab transcript={transcript} setTranscript={setTranscript} meetingNumber={meetingNumber} transcriptEndRef={transcriptEndRef} transcriptActiveRef={transcriptActiveRef} transcriptActive={transcriptActive} setTranscriptActive={setTranscriptActive} />}
           {activeTab === 'ai' && <div className="ai-body"><AiInsights transcript={transcript} topic={topic} insights={insights} setInsights={setInsights} meetingNumber={meetingNumber} /></div>}
-          {activeTab === 'brief' && role === 'mentor' && <PreMeetingBrief menteeName={menteeName || 'mentee'} mentorName={userName} compact={true} />}
+          {activeTab === 'actions' && role === 'mentor' && (
+            <div className="actions-panel">
+              <div className="actions-subtabs">
+                <button className={`actions-subtab ${actionTab==='outstanding'?'active':''}`} onClick={()=>setActionTab('outstanding')}>
+                  📋 Outstanding
+                </button>
+                <button className={`actions-subtab ${actionTab==='new'?'active':''}`} onClick={()=>setActionTab('new')}>
+                  ✅ New Actions
+                </button>
+              </div>
+
+              {actionTab === 'outstanding' && (
+                <div className="actions-list">
+                  {briefData?.action_items?.filter(a=>a).length > 0 ? briefData.action_items.map((a,i) => (
+                    <div key={i} className="actions-panel-item">
+                      <span className="actions-num">{i+1}</span>
+                      <span>{a}</span>
+                    </div>
+                  )) : (
+                    <div className="actions-empty">
+                      <div style={{fontSize:28,marginBottom:12}}>✅</div>
+                      <p>No outstanding action items</p>
+                      <p style={{fontSize:12,color:'var(--faint)',marginTop:4}}>Items from past sessions appear here</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {actionTab === 'new' && (
+                <div className="actions-new">
+                  <div className="actions-new-label">Select action items agreed in this session:</div>
+                  <div className="actions-new-options">
+                    {['Playbook','Connect to Expert','Register for Masterclass','Service Provider','Research'].map(action => (
+                      <button key={action}
+                        className={`actions-new-btn ${selectedActions.includes(action)?'selected':''}`}
+                        onClick={() => setSelectedActions(prev =>
+                          prev.includes(action) ? prev.filter(a=>a!==action) : [...prev, action]
+                        )}>
+                        {action === 'Playbook' && '📘 '}
+                        {action === 'Connect to Expert' && '🤝 '}
+                        {action === 'Register for Masterclass' && '🎓 '}
+                        {action === 'Service Provider' && '🔧 '}
+                        {action === 'Research' && '🔍 '}
+                        {action}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="actions-new-label" style={{marginTop:14}}>Comments</div>
+                  <textarea className="actions-comments"
+                    placeholder="Add any notes or context for these action items…"
+                    rows={4}
+                    value={actionComments}
+                    onChange={e => setActionComments(e.target.value)} />
+                  <button className="actions-save-btn"
+                    disabled={savingActions || (selectedActions.length === 0 && !actionComments)}
+                    onClick={async () => {
+                      setSavingActions(true)
+                      try {
+                        const { createClient } = await import('@supabase/supabase-js')
+                        const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+                        await Promise.all(selectedActions.map(action =>
+                          sb.from('session_action_items').insert({
+                            session_id: meetingNumber,
+                            mentor_email: role === 'mentor' ? userEmail : undefined,
+                            mentee_email: role === 'mentee' ? userEmail : undefined,
+                            mentee_name: menteeName,
+                            mentor_name: role === 'mentor' ? userName : mentorName,
+                            action_type: action,
+                            comments: actionComments,
+                            status: 'pending'
+                          })
+                        ))
+                        if (selectedActions.length === 0 && actionComments) {
+                          const sb2 = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+                          await sb2.from('session_action_items').insert({
+                            session_id: meetingNumber,
+                            mentee_name: menteeName,
+                            mentor_name: role === 'mentor' ? userName : mentorName,
+                            action_type: 'General',
+                            comments: actionComments
+                          })
+                        }
+                        setSavedActions(true)
+                        setTimeout(() => setSavedActions(false), 3000)
+                        setSelectedActions([])
+                        setActionComments('')
+                      } finally { setSavingActions(false) }
+                    }}>
+                    {savingActions ? '⏳ Saving…' : savedActions ? '✓ Saved!' : '💾 Save Action Items'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === 'brief' && role === 'mentor' && (
+            <div className="brief-panel">
+              {briefLoading ? (
+                <div className="brief-panel-loading"><div className="mreq-spinner"/><span>Loading brief…</span></div>
+              ) : briefData ? (
+                <>
+                  {briefData.progress_summary && (
+                    <div className="brief-panel-section">
+                      <div className="brief-panel-label">📈 Progress</div>
+                      <div className="brief-panel-text">{briefData.progress_summary}</div>
+                    </div>
+                  )}
+                  {briefData.red_flags?.filter(f=>f).length > 0 && (
+                    <div className="brief-panel-section brief-flags">
+                      <div className="brief-panel-label" style={{color:'var(--red)'}}>🚩 Red Flags</div>
+                      {briefData.red_flags.map((f,i) => <div key={i} className="brief-flag-item">⚠ {f}</div>)}
+                    </div>
+                  )}
+                  <div className="brief-panel-section">
+                    <div className="brief-panel-label">📝 Overview</div>
+                    <div className="brief-panel-text">{briefData.brief_text}</div>
+                  </div>
+                  {briefData.focus_areas?.length > 0 && (
+                    <div className="brief-panel-section">
+                      <div className="brief-panel-label">🎯 Focus Areas</div>
+                      <div className="brief-focus-tags">
+                        {briefData.focus_areas.map((a,i) => <span key={i} className="brief-focus-tag">{a}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  {briefData.key_questions?.length > 0 && (
+                    <div className="brief-panel-section">
+                      <div className="brief-panel-label">💡 Suggested Questions</div>
+                      {briefData.key_questions.map((q,i) => (
+                        <div key={i} className="brief-question">
+                          <span className="actions-num">{i+1}</span><span>{q}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="actions-empty">
+                  <div style={{fontSize:28,marginBottom:12}}>📋</div>
+                  <p>No brief available</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

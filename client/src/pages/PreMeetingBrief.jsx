@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import './PreMeetingBrief.css'
 
-export default function PreMeetingBrief({ menteeName, mentorName, onClose, compact = false }) {
+export default function PreMeetingBrief({ menteeName, mentorName, onClose, compact = false, companyName = '', companyStage = '', meetingGoal = '', mentorEmail = '', requestId = '', onBriefLoaded = null }) {
   const [brief, setBrief] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -13,11 +13,19 @@ export default function PreMeetingBrief({ menteeName, mentorName, onClose, compa
   async function fetchBrief() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/brief/${encodeURIComponent(menteeName)}`)
+      const params = new URLSearchParams({
+        mentorEmail,
+        companyName,
+        stage: companyStage,
+        goal: meetingGoal,
+        ...(requestId ? { requestId } : {})
+      })
+      const res = await fetch(`/api/brief-with-context/${encodeURIComponent(menteeName)}?${params}`)
       const data = await res.json()
       if (data.error) { setError(data.error); return }
       if (data.message) { setError(data.message); return }
       setBrief(data)
+      if (onBriefLoaded && data?.brief) onBriefLoaded(data.brief)
     } catch (err) {
       setError('Could not load brief: ' + err.message)
     } finally {
@@ -78,6 +86,29 @@ export default function PreMeetingBrief({ menteeName, mentorName, onClose, compa
           <div className="pmb-section pmb-progress">
             <div className="pmb-section-label">📈 Progress</div>
             <div className="pmb-progress-text">{b.progress_summary}</div>
+          </div>
+        )}
+
+        {/* Red flags */}
+        {b.red_flags && b.red_flags.filter(f=>f).length > 0 && (
+          <div className="pmb-section pmb-red-flags">
+            <div className="pmb-section-label" style={{color:'var(--red)'}}>🚩 Red Flags</div>
+            {b.red_flags.map((f,i) => (
+              <div key={i} className="pmb-flag-item">⚠ {f}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Action items */}
+        {b.action_items && b.action_items.filter(a=>a).length > 0 && (
+          <div className="pmb-section pmb-action-items">
+            <div className="pmb-section-label" style={{color:'var(--green)'}}>✅ Outstanding Action Items</div>
+            {b.action_items.map((a,i) => (
+              <div key={i} className="pmb-action-item">
+                <span className="pmb-q-num">{i+1}</span>
+                <span>{a}</span>
+              </div>
+            ))}
           </div>
         )}
 

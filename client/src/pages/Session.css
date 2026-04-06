@@ -234,7 +234,7 @@
 .live-workbench {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 480px;
   overflow: hidden;
   min-height: 0;
 }
@@ -492,7 +492,7 @@
   position: fixed !important;
   top: 56px !important;
   left: 0 !important;
-  width: calc(100vw - 360px) !important;
+  width: calc(100vw - 480px) !important;
   height: calc(100vh - 56px) !important;
   z-index: 9999 !important;
   background: var(--bg) !important;
@@ -614,3 +614,134 @@
 .tx-enable-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(232,93,38,0.4); }
 .tx-enable-btn.active { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 .tx-enable-btn.active:hover { box-shadow: 0 4px 16px rgba(231,76,60,0.4); }
+
+/* ── Brief button in topbar ───────────────────────────────────── */
+.brief-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--accent-lo);
+  border: 1px solid rgba(79,124,255,0.25);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.brief-btn:hover { background: rgba(79,124,255,0.15); border-color: var(--accent); }
+.brief-btn.active { background: var(--accent); color: #fff; }
+
+/* ── Zoom internal dropdowns must appear above our panel ──────── */
+.zm-modal-legacy, .zoom-meeting-sdk .dropdown-menu,
+[class*="dropdown"], [class*="zm-menu"], [class*="menu-container"] {
+  z-index: 99999 !important;
+}
+
+/* ── Action Items Panel ───────────────────────────────────────── */
+.actions-panel { padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; height: 100%; }
+.actions-panel-title { font-size: 10px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.actions-panel-item { display: flex; gap: 10px; padding: 10px 12px; background: rgba(26,173,106,0.06); border: 1px solid rgba(26,173,106,0.15); border-radius: 9px; font-size: 13px; color: var(--text); line-height: 1.5; }
+.actions-num { width: 20px; height: 20px; border-radius: 50%; background: rgba(26,173,106,0.15); color: var(--green); font-size: 10px; font-family: var(--font-mono); font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.actions-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 14px; }
+
+/* ── Action Items Sub-tabs ────────────────────────────────────── */
+.actions-subtabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 0;
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.actions-subtab {
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.actions-subtab:hover { color: var(--text); }
+.actions-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Outstanding list ─────────────────────────────────────────── */
+.actions-list { padding: 16px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+
+/* ── New Actions ──────────────────────────────────────────────── */
+.actions-new { padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.actions-new-label { font-size: 11px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.actions-new-options { display: flex; flex-direction: column; gap: 8px; }
+.actions-new-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.actions-new-btn:hover { border-color: var(--accent); background: rgba(79,124,255,0.04); }
+.actions-new-btn.selected {
+  border-color: var(--accent);
+  background: rgba(79,124,255,0.08);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,124,255,0.1);
+}
+.actions-comments {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.actions-comments:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,124,255,0.1); }
+.actions-comments::placeholder { color: var(--faint); }
+.actions-save-btn {
+  width: 100%;
+  padding: 11px;
+  background: var(--accent);
+  border: none;
+  border-radius: 9px;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.actions-save-btn:hover:not(:disabled) { background: var(--accent-h); box-shadow: 0 4px 14px rgba(79,124,255,0.3); }
+.actions-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Brief Panel ──────────────────────────────────────────────── */
+.brief-panel { padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; height: 100%; }
+.brief-panel-loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; padding: 20px; }
+.brief-panel-section { display: flex; flex-direction: column; gap: 7px; }
+.brief-panel-section.brief-flags { background: rgba(240,96,96,0.05); border: 1px solid rgba(240,96,96,0.2); border-radius: 10px; padding: 12px; }
+.brief-panel-label { font-size: 10px; font-family: var(--font-mono); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.brief-panel-text { font-size: 13px; color: var(--text); line-height: 1.7; }
+.brief-flag-item { font-size: 12px; color: var(--red); padding: 2px 0; }
+.brief-focus-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.brief-focus-tag { background: rgba(79,124,255,0.08); border: 1px solid rgba(79,124,255,0.18); color: var(--accent); font-size: 11px; font-family: var(--font-mono); font-weight: 600; padding: 3px 10px; border-radius: 99px; }
+.brief-question { display: flex; gap: 8px; font-size: 13px; color: var(--text); padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+.brief-question:last-child { border-bottom: none; }
