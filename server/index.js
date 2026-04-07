@@ -194,7 +194,7 @@ Respond ONLY with valid JSON array:
 app.get('/api/brief-with-context/:menteeName', async (req, res) => {
   try {
     const menteeName = decodeURIComponent(req.params.menteeName)
-    const { companyName, companyUrl, stage, goal, mentorEmail, requestId } = req.query
+    const { companyName, companyUrl, stage, goal, mentorEmail, requestId, product, location, state, revenueLakhs, employeeCount, theme, companyInfo } = req.query
 
     // Get past sessions filtered by both mentee and mentor
     let sessionQuery = supabase
@@ -247,8 +247,13 @@ Past sessions with this mentor: ${hasPastSessions ? sessions.length : 0}
 
 === UPCOMING MEETING REQUEST ===
 Company: ${companyName || 'Not provided'}
-Company URL: ${companyUrl || 'Not provided'}
-Stage: ${stage || 'Not provided'}
+Product/Service: ${product || 'Not provided'}
+Location: ${location ? location + (state ? ', ' + state : '') : 'Not provided'}
+Revenue: ${revenueLakhs ? '₹' + revenueLakhs + ' lakhs/year' : 'Not provided'}
+Employees: ${employeeCount || 'Not provided'}
+Theme/Focus: ${theme || 'Not provided'}
+Company Background: ${companyInfo || 'Not provided'}
+Program Stage: ${stage || 'Not provided'}
 What mentee wants to achieve: ${goal || 'Not provided'}
 
 ${hasPastSessions ? `=== PAST SESSION HISTORY ===
@@ -715,6 +720,99 @@ Respond ONLY with valid JSON, no markdown:
     res.json(parsed)
   } catch (err) {
     console.error('Insights error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── MATCH MENTORS FOR A MENTEE (Claude-direct, no embeddings needed) ─────────
+app.post('/api/match-mentors', async (req, res) => {
+  try {
+    const { tiering, product, theme, problemStatement, companyName, state, revenueLakhs, matchCount = 5, context = '' } = req.body
+
+    if (!tiering || !product) return res.status(400).json({ error: 'tiering and product required' })
+
+    // Filter mentors by tiering rule:
+    // Liftoff mentees → Liftoff mentors only
+    // Accelerate mentees → Accelerate + Liftoff mentors
+    let tieringFilter
+    if (tiering === 'Liftoff') {
+      tieringFilter = ['Liftoff', 'Ignite, Liftoff']
+    } else {
+      tieringFilter = ['Accelerate', 'Liftoff', 'Ignite, Liftoff']
+    }
+
+    const { data: mentors } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio')
+      .eq('role', 'mentor')
+      .in('tiering', tieringFilter)
+
+    if (!mentors || mentors.length === 0) return res.json({ matches: [] })
+
+    // Build concise mentor list for Claude
+    const mentorList = mentors.map((m, i) =>
+      `${i+1}|${m.full_name}|${m.primary_expertise || ''}|${m.secondary_expertise || ''}|${m.primary_industry || ''}|${m.secondary_industry || ''}|${m.tiering}|${m.location || ''}|${m.years_experience || ''}yr`
+    ).join('\n')
+
+    const prompt = `You are an expert-matching specialist at Wadhwani Foundation helping connect businesses with the right mentors/experts.
+
+MENTEE BUSINESS:
+- Company: ${companyName || 'N/A'}
+- Product: ${product}
+- State: ${state || 'N/A'}
+- Revenue: ${revenueLakhs ? revenueLakhs + 'L INR' : 'N/A'}
+- Program: ${tiering}
+- Theme: ${theme || 'N/A'}
+- Problem: ${problemStatement || 'N/A'}
+
+AVAILABLE MENTORS (index|name|primary_expertise|secondary_expertise|primary_industry|secondary_industry|tiering|location|experience):
+${mentorList}
+
+Pick the TOP 5 mentors who best match this business based on their expertise and industry fit with the mentee's product, problem and theme.
+
+Respond ONLY with valid JSON array:
+[
+  {"index": 1, "match_reason": "1-2 sentence specific reason why this mentor fits"},
+  {"index": 3, "match_reason": "..."},
+  {"index": 7, "match_reason": "..."},
+  {"index": 12, "match_reason": "..."},
+  {"index": 15, "match_reason": "..."}
+]`
+
+    const text = await callClaude(prompt)
+    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    const rankings = JSON.parse(clean)
+
+    const matches = rankings.map((r, rank) => {
+      const mentor = mentors[r.index - 1]
+      if (!mentor) return null
+      return { ...mentor, rank: rank + 1, match_reason: r.match_reason }
+    }).filter(Boolean)
+
+    res.json({ matches, total_candidates: mentors.length })
+  } catch (err) {
+    console.error('Match mentors error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── AI COMPANY SUMMARY ───────────────────────────────────────────────────────
+app.post('/api/company-summary', async (req, res) => {
+  try {
+    const { companyName, product, location, state, revenueLakhs, employeeCount, tiering } = req.body
+    const prompt = `Write a factual 2-sentence company profile. Only include objective facts about the company — name, what they make, where they are, size and revenue. Do NOT include goals, aspirations, what they are seeking, or why they want mentorship.
+
+Company name: ${companyName}
+Product/Service: ${product}
+Location: ${location}, ${state}
+Revenue: ₹${revenueLakhs} lakhs per year
+Employees: ${employeeCount}
+
+Write only 2 factual sentences describing what this company is and does. No goals, no aspirations, no mentorship language.`
+
+    const text = await callClaude(prompt)
+    res.json({ summary: text.trim() })
+  } catch(err) {
     res.status(500).json({ error: err.message })
   }
 })

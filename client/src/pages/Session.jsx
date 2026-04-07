@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { supabase } from '../lib/supabase'
+import { localDateKey, tomorrowDateKey } from '../lib/dateUtils'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { getSignature } from '../lib/api'
@@ -216,6 +219,7 @@ export default function Session() {
   const [topic, setTopic] = useState('')
   const [mentorName, setMentorName] = useState('')
   const [menteeName, setMenteeName] = useState('')
+  const [menteeEmail, setMenteeEmail] = useState('')
   const [errMsg, setErrMsg] = useState('')
   const [copied, setCopied] = useState('')
   const [activeTab, setActiveTab] = useState('transcript')
@@ -227,6 +231,14 @@ export default function Session() {
   const [actionComments, setActionComments] = useState('')
   const [savingActions, setSavingActions] = useState(false)
   const [savedActions, setSavedActions] = useState(false)
+  const [showExpertModal, setShowExpertModal] = useState(false)
+  const [expertAvailability, setExpertAvailability] = useState([])
+  const [expertSelectedSlot, setExpertSelectedSlot] = useState({}) // {expertId: {avail, slot}}
+  const [expertModalDate, setExpertModalDate] = useState({}) // {expertId: availObj}
+  const [sendingExpertRequest, setSendingExpertRequest] = useState(null)
+  const [sentExpertRequests, setSentExpertRequests] = useState({})
+  const [expertMatches, setExpertMatches] = useState([])
+  const [loadingExperts, setLoadingExperts] = useState(false)
   const [transcript, setTranscript] = useState([])
   const [insights, setInsights] = useState([])
   const [postMeetingSummary, setPostMeetingSummary] = useState(null)
@@ -251,6 +263,12 @@ export default function Session() {
   }, [])
 
   useEffect(() => {
+    // Fetch mentee email from meeting request
+    if (role === 'mentor' && meetingNumber) {
+      supabase.from('meeting_requests').select('mentee_email').eq('zoom_meeting_id', meetingNumber).single()
+        .then(({data}) => { if (data?.mentee_email) setMenteeEmail(data.mentee_email) })
+    }
+
     if (role === 'mentor' && menteeName) {
       setBriefLoading(true)
       fetch('/api/brief-with-context/' + encodeURIComponent(menteeName) + '?' + new URLSearchParams({
@@ -451,6 +469,34 @@ export default function Session() {
     } catch (err) { setErrMsg('Error: ' + err.message); setPhase('setup') }
   }, [meetingNumber, role, userName, userEmail, password, topic, mentorName, menteeName])
 
+  async function findExperts() {
+    setShowExpertModal(true)
+    if (expertMatches.length > 0) return
+    setLoadingExperts(true)
+    try {
+      const lines = (transcriptRef.current || []).slice(-30).map(l => l.name + ': ' + l.text).join('\n')
+      const bc = briefData ? 'Focus: ' + (briefData.focus_areas||[]).join(', ') : ''
+      const res = await fetch('/api/match-mentors', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ tiering:'Liftoff', product:topic, theme:'Expert Connection',
+          problemStatement: (lines.slice(-500)||bc), companyName:menteeName,
+          state:'', revenueLakhs:'', matchCount:10 })
+      })
+      const data = await res.json()
+      const matches = data.matches || []
+      setExpertMatches(matches)
+      // Fetch availability for matched experts
+      if (matches.length > 0) {
+        const today = tomorrowDateKey()
+        const emails = matches.map(m => m.email)
+        const { data: avail } = await supabase.from('mentor_availability')
+          .select('*').in('mentor_email', emails).gte('date', today).order('date')
+        setExpertAvailability(avail || [])
+      }
+    } catch(e) { console.error(e) }
+    finally { setLoadingExperts(false) }
+  }
+
   async function leave() {
     localStorage.removeItem('activeMeeting')
     try {
@@ -634,9 +680,10 @@ export default function Session() {
                     {['Playbook','Connect to Expert','Register for Masterclass','Service Provider','Research'].map(action => (
                       <button key={action}
                         className={`actions-new-btn ${selectedActions.includes(action)?'selected':''}`}
-                        onClick={() => setSelectedActions(prev =>
-                          prev.includes(action) ? prev.filter(a=>a!==action) : [...prev, action]
-                        )}>
+                        onClick={() => {
+                          if (action === 'Connect to Expert') { findExperts(); setSelectedActions(prev => prev.includes(action)?prev:[...prev,action]) }
+                          else setSelectedActions(prev => prev.includes(action)?prev.filter(a=>a!==action):[...prev,action])
+                        }}>
                         {action === 'Playbook' && '📘 '}
                         {action === 'Connect to Expert' && '🤝 '}
                         {action === 'Register for Masterclass' && '🎓 '}
@@ -744,6 +791,124 @@ export default function Session() {
           )}
         </div>
       </div>
+      {showExpertModal && createPortal(
+        <div onClick={()=>setShowExpertModal(false)} style={{position:'fixed',inset:0,background:'rgba(10,15,40,0.6)',zIndex:999999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:680,maxHeight:'85vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.25)'}}>
+            <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #eee',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontSize:16,fontWeight:600,color:'#1a2b3c'}}>🤝 Connect to Expert</div>
+                <div style={{fontSize:11,color:'#8a9bb0',marginTop:2}}>AI-matched from live session context</div>
+              </div>
+              <button onClick={()=>setShowExpertModal(false)} style={{width:30,height:30,borderRadius:8,border:'1px solid #eee',background:'#f8f8f8',cursor:'pointer'}}>✕</button>
+            </div>
+            <div style={{overflowY:'auto',padding:20,display:'flex',flexDirection:'column',gap:12}}>
+              {loadingExperts
+                ? <div style={{display:'flex',alignItems:'center',gap:10,color:'#8a9bb0',padding:'20px 0'}}><div className="mreq-spinner"/> Finding best experts…</div>
+                : expertMatches.length===0
+                  ? <div style={{color:'#8a9bb0',textAlign:'center',padding:20}}>No matches found</div>
+                  : expertMatches.map((expert,i) => {
+                    const COLORS = ['#4f7cff','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6']
+                    const expertAvail = expertAvailability.filter(a => a.mentor_email === expert.email && a.slots?.some(s=>!s.booked))
+                    const selDate = expertModalDate[expert.id]
+                    const selSlot = expertSelectedSlot[expert.id]?.slot
+                    const sent = sentExpertRequests[expert.id]
+                    return (
+                      <div key={expert.id} style={{background:'#fff',border:'1px solid #e8ebff',borderRadius:14,padding:18,display:'flex',flexDirection:'column',gap:10,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>
+                        {/* Header */}
+                        <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
+                          <div style={{display:'flex',flexWrap:'wrap',gap:5,flex:1}}>
+                            {expert.primary_industry && <span style={{fontSize:10,fontWeight:600,padding:'3px 9px',borderRadius:99,background:'#edf2f7',color:'#1a3a5c'}}>{expert.primary_industry}</span>}
+                            {(() => { const b=(expert.bio||'').toLowerCase(); const mkts=['USA','Europe','UK','Singapore','Middle East','Japan','Global','International'].filter(m=>b.includes(m.toLowerCase())); return mkts.length>0 ? <span style={{fontSize:10,fontWeight:600,padding:'3px 9px',borderRadius:99,background:'#f0faf4',color:'#276749'}}>🌍 {mkts.slice(0,2).join(', ')}</span> : null })()}
+                          </div>
+                          <div style={{fontSize:10,color:'#4f7cff',background:'rgba(79,124,255,0.1)',padding:'3px 8px',borderRadius:6,fontWeight:700,flexShrink:0}}>#{i+1}</div>
+                        </div>
+                        {/* Identity */}
+                        <div style={{display:'flex',alignItems:'center',gap:10}}>
+                          <div style={{width:40,height:40,borderRadius:10,background:COLORS[i%10],display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,color:'#fff',flexShrink:0}}>
+                            {expert.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2)}
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:15,fontWeight:600,color:'#1a2b3c'}}>{expert.full_name}</div>
+                            <div style={{fontSize:11,color:'#6b7a8a',marginTop:2}}>{expert.primary_expertise}{expert.secondary_expertise?' · '+expert.secondary_expertise:''}</div>
+                            {expert.location && <div style={{fontSize:11,color:'#aaa',marginTop:1}}>📍 {expert.location}</div>}
+                          </div>
+                          {expert.linkedin_url && <a href={expert.linkedin_url} target="_blank" rel="noreferrer" style={{width:28,height:28,borderRadius:6,background:'#0077b5',color:'#fff',fontSize:12,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',textDecoration:'none',flexShrink:0}}>in</a>}
+                        </div>
+                        {/* Match reason */}
+                        <div style={{fontSize:12,color:'#2d3748',lineHeight:1.6,background:'rgba(79,124,255,0.04)',borderRadius:8,padding:'8px 12px',borderLeft:'3px solid #4f7cff'}}>{expert.match_reason}</div>
+                        {/* Availability + booking */}
+                        {sent ? (
+                          <div style={{padding:'10px 14px',background:'#f0faf4',borderRadius:9,color:'#276749',fontSize:13,fontWeight:600,textAlign:'center'}}>✓ Request sent on behalf of {menteeName}</div>
+                        ) : expertAvail.length === 0 ? (
+                          <div style={{fontSize:12,color:'#aaa',fontStyle:'italic'}}>No availability set</div>
+                        ) : (
+                          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                            <select
+                              value={selDate?.id||expertAvail[0]?.id||''}
+                              onChange={e => {
+                                const av = expertAvail.find(a=>a.id===e.target.value)
+                                setExpertModalDate(prev=>({...prev,[expert.id]:av}))
+                                setExpertSelectedSlot(prev=>({...prev,[expert.id]:{}}))
+                              }}
+                              style={{padding:'8px 12px',borderRadius:8,border:'1px solid #e0e0e0',fontSize:12,background:'#f8f9ff',outline:'none'}}>
+                              {expertAvail.map(av => (
+                                <option key={av.id} value={av.id}>
+                                  {new Date(av.date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})} · {av.slots.filter(s=>!s.booked).length} slots
+                                </option>
+                              ))}
+                            </select>
+                            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                              {(selDate||expertAvail[0])?.slots.filter(s=>!s.booked).map((slot,si) => (
+                                <button key={si}
+                                  onClick={()=>setExpertSelectedSlot(prev=>({...prev,[expert.id]:{avail:selDate||expertAvail[0],slot}}))}
+                                  style={{padding:'5px 12px',borderRadius:7,border:`1.5px solid ${selSlot?.start===slot.start?'#4f7cff':'#e0e0e0'}`,background:selSlot?.start===slot.start?'rgba(79,124,255,0.1)':'#fff',color:selSlot?.start===slot.start?'#4f7cff':'#555',fontSize:11,cursor:'pointer',fontWeight:selSlot?.start===slot.start?700:400}}>
+                                  {slot.start}–{slot.end}
+                                </button>
+                              ))}
+                            </div>
+                            {selSlot && (
+                              <button
+                                disabled={sendingExpertRequest===expert.id}
+                                onClick={async()=>{
+                                  setSendingExpertRequest(expert.id)
+                                  try {
+                                    const selAv = expertSelectedSlot[expert.id]?.avail || expertAvail[0]
+                                    await supabase.from('meeting_requests').insert({
+                                      mentee_id: null,
+                                      mentee_name: menteeName,
+                                      mentee_email: menteeEmail || '',
+                                      mentor_id: expert.id,
+                                      mentor_name: expert.full_name,
+                                      mentor_email: expert.email,
+                                      requested_date: selAv.date,
+                                      requested_slot: selSlot,
+                                      timezone: selAv.timezone || 'Asia/Kolkata',
+                                      company_name: topic,
+                                      meeting_goal: 'Expert connection recommended during mentoring session',
+                                      status: 'pending'
+                                    })
+                                    // Mark slot booked
+                                    const updatedSlots = selAv.slots.map(s => s.start===selSlot.start?{...s,booked:true}:s)
+                                    await supabase.from('mentor_availability').update({slots:updatedSlots}).eq('mentor_email',expert.email).eq('date',selAv.date)
+                                    setSentExpertRequests(prev=>({...prev,[expert.id]:true}))
+                                  } catch(e){console.error(e)}
+                                  finally{setSendingExpertRequest(null)}
+                                }}
+                                style={{padding:'10px',borderRadius:9,background:'#4f7cff',border:'none',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',width:'100%'}}>
+                                {sendingExpertRequest===expert.id?'⏳ Sending…':'📨 Send Request for '+menteeName+' · '+selSlot.start+'–'+selSlot.end}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+              }
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

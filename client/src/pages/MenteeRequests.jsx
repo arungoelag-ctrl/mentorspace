@@ -68,7 +68,7 @@ export default function MenteeRequests({ embedded = false, initialFilter = 'all'
           <div className="avail-title">My Meeting Requests</div>
           <div className="avail-sub">Track your requests and join accepted meetings</div>
         </div>
-        <button className="avail-add-btn" onClick={() => navigate('/discover')}>🔍 Discover Mentors</button>
+        <button className="mreq-find-btn" onClick={() => navigate('/discover')}>🔍 Discover Mentors</button>
       </div>}
 
       <div className="mreq-tabs">
@@ -84,7 +84,7 @@ export default function MenteeRequests({ embedded = false, initialFilter = 'all'
         <div className="avail-empty">
           <div className="avail-empty-icon">📬</div>
           <p>No {filterStatus === 'all' ? '' : filterStatus} requests.</p>
-          <button className="avail-add-btn" style={{marginTop:12}} onClick={() => navigate('/discover')}>🔍 Find a Mentor</button>
+          <button className="mreq-find-btn" onClick={() => navigate('/discover')}>🔍 Find a Mentor</button>
         </div>
        ) : (
         <div className="mreq-list" style={{maxWidth:720}}>

@@ -14,6 +14,7 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
   const [selected, setSelected] = useState(null)
   const [briefCache, setBriefCache] = useState({})
   const [briefLoading, setBriefLoading] = useState(false)
+  const [menteeProfile, setMenteeProfile] = useState(null)
   const [brief, setBrief] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [respondingId, setRespondingId] = useState(null)
@@ -37,6 +38,11 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
   }
 
   async function loadBrief(req) {
+    // Fetch mentee profile for company details
+    supabase.from('profiles').select('product,state,location,revenue_lakhs,employee_count,theme,problem_statement')
+      .eq('email', req.mentee_email).single()
+      .then(({data}) => setMenteeProfile(data || null))
+    
     setSelected(req)
     setBrief(null)
     setRespondingId(null)
@@ -69,13 +75,24 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
     // 3. Generate fresh brief
     setBriefLoading(true)
     try {
+      // Get mentee profile for richer context
+      const { data: mp } = await supabase.from('profiles').select('product,state,location,revenue_lakhs,employee_count,theme,problem_statement').eq('email', req.mentee_email).single()
+      setMenteeProfile(mp || null)
+
       const res = await fetch(`/api/brief-with-context/${encodeURIComponent(req.mentee_name)}?` + new URLSearchParams({
         companyName: req.company_name,
         mentorEmail: user?.email,
         companyUrl: req.company_url || '',
         stage: req.company_stage,
         goal: req.meeting_goal,
-        requestId: req.id
+        requestId: req.id,
+        product: mp?.product || '',
+        location: mp?.location || '',
+        state: mp?.state || '',
+        revenueLakhs: mp?.revenue_lakhs || '',
+        employeeCount: mp?.employee_count || '',
+        theme: mp?.theme || '',
+        companyInfo: req.company_info || ''
       }))
       const data = await res.json()
       setBrief(data)
@@ -231,12 +248,14 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
           <div className="mreq-detail">
             <div className="mreq-detail-header">
               <div>
-                <div className="mreq-detail-name">{selected.mentee_name}</div>
+                <div className="mreq-detail-name" style={{fontWeight:600,fontSize:18,letterSpacing:-0.3}}>{selected.mentee_name}</div>
                 <div className="mreq-detail-meta">
-                  <span className="mreq-stage-pill"
-                    style={{background:`${STAGE_COLORS[selected.company_stage]}18`, color:STAGE_COLORS[selected.company_stage], border:`1px solid ${STAGE_COLORS[selected.company_stage]}35`}}>
-                    {selected.company_stage}
-                  </span>
+                  {selected.company_stage && !['Accelerate','Liftoff','Ignite'].includes(selected.company_stage) && (
+                    <span className="mreq-stage-pill"
+                      style={{background:`${STAGE_COLORS[selected.company_stage]}18`, color:STAGE_COLORS[selected.company_stage], border:`1px solid ${STAGE_COLORS[selected.company_stage]}35`}}>
+                      {selected.company_stage}
+                    </span>
+                  )}
                   <span className={`mreq-status-pill ${selected.status}`}>{selected.status}</span>
                 </div>
               </div>
@@ -245,7 +264,13 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
 
             <div className="mreq-detail-section">
               <div className="mreq-detail-section-label">🏢 Company</div>
-              <div className="mreq-info-row"><span>Name</span><strong>{selected.company_name}</strong></div>
+              <div className="mreq-info-row"><span>Company</span><strong>{selected.company_name}</strong></div>
+              {selected.company_info && <div className="mreq-company-about">{selected.company_info}</div>}
+              {menteeProfile?.product && <div className="mreq-info-row"><span>Product</span><strong>{menteeProfile.product}</strong></div>}
+              {(menteeProfile?.location || menteeProfile?.state) && <div className="mreq-info-row"><span>Location</span><strong>{menteeProfile.location}{menteeProfile.state?', '+menteeProfile.state:''}</strong></div>}
+              {menteeProfile?.revenue_lakhs && <div className="mreq-info-row"><span>Revenue</span><strong>₹{menteeProfile.revenue_lakhs}L</strong></div>}
+              {menteeProfile?.employee_count && <div className="mreq-info-row"><span>Employees</span><strong>{menteeProfile.employee_count}</strong></div>}
+              {menteeProfile?.theme && <div className="mreq-info-row"><span>Theme</span><strong>{menteeProfile.theme}</strong></div>}
               {selected.company_url && <div className="mreq-info-row"><span>URL</span><a href={selected.company_url} target="_blank" rel="noreferrer" className="mreq-link">{selected.company_url}</a></div>}
               <div className="mreq-info-row"><span>Date</span><strong>{selected.requested_date} · {selected.requested_slot?.start}–{selected.requested_slot?.end}</strong></div>
             </div>

@@ -1,3 +1,4 @@
+import { localDateKey } from '../lib/dateUtils'
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
@@ -5,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import './MentorAvailability.css'
 
 const TIMEZONES = ['Asia/Kolkata','Asia/Dubai','Europe/London','Europe/Paris','America/New_York','America/Los_Angeles','Asia/Singapore','Australia/Sydney']
-const HOURS = Array.from({length: 13}, (_, i) => i + 8)
+const HOURS = Array.from({length: 24}, (_, i) => i)
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 function getWeekDates(startDate) {
@@ -16,7 +17,7 @@ function getWeekDates(startDate) {
   return dates
 }
 
-function dateKey(date) { return date.toISOString().split('T')[0] }
+function dateKey(date) { return localDateKey(date) }
 
 function formatHour(h) {
   const ampm = h >= 12 ? 'PM' : 'AM'
@@ -57,7 +58,7 @@ export default function MentorAvailability({ embedded = false }) {
       const [{ data: availData }, { data: reqData }] = await Promise.all([
         supabase.from('mentor_availability').select('*')
           .eq('mentor_email', user?.email)
-          .gte('date', new Date().toISOString().split('T')[0]),
+          .gte('date', localDateKey(new Date())),
         supabase.from('meeting_requests').select('*')
           .eq('mentor_email', user?.email)
           .in('status', ['pending', 'accepted', 'rescheduled', 'completed'])
@@ -198,7 +199,9 @@ export default function MentorAvailability({ embedded = false }) {
             <div className="avail-time-label">{formatHour(hour)}</div>
             {weekDates.map((date, di) => {
               const dateStr = dateKey(date)
-              const isPast = dateKey(date) < todayStr
+              const now = new Date()
+              const slotDateTime = new Date(dateStr + 'T' + String(hour).padStart(2,'0') + ':00:00')
+              const isPast = slotDateTime < now
               const isSelected = selected[dateStr]?.has(hour)
               const isSaved = saved[dateStr]?.has(hour)
               const req = requestMap[`${dateStr}:${hour}`]

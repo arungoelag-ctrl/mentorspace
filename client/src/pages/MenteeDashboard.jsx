@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 import TranscriptViewer from './TranscriptViewer'
@@ -88,6 +88,7 @@ function SessionCard({ session, insights }) {
 export default function MenteeDashboard() {
   const { profile, user, signOut } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sessions, setSessions] = useState([])
   const [insights, setInsights] = useState([])
   const [loading, setLoading] = useState(true)
@@ -95,6 +96,17 @@ export default function MenteeDashboard() {
   const [activeView, setActiveView] = useState('sessions')
   const [mainTab, setMainTab] = useState('sessions')
   const [requestsFilter, setRequestsFilter] = useState('pending')
+  const [matchCache, setMatchCache] = useState(null)
+  const [requestsRefresh, setRequestsRefresh] = useState(0)
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      setMainTab(location.state.tab)
+      if (location.state.filter) setRequestsFilter(location.state.filter)
+      if (location.state.tab === 'requests') setRequestsRefresh(r => r+1)
+      window.history.replaceState({}, '')
+    }
+  }, [])
   const [joinId, setJoinId] = useState('')
   const [joinPw, setJoinPw] = useState('')
 
@@ -156,7 +168,7 @@ export default function MenteeDashboard() {
           </div>
         </div>
         <div className="md-top-right">
-          <button className="md-intel-btn" onClick={() => setMainTab('discover')}>🔍 Find a Mentor</button>
+          <button className="md-intel-btn" onClick={() => navigate('/discover')}>🔍 Find a Mentor</button>
           <button className="md-intel-btn" onClick={() => navigate('/intelligence')}>📊 Market Intelligence</button>
           <button className="md-signout" onClick={signOut}>Sign out</button>
         </div>
@@ -184,9 +196,13 @@ export default function MenteeDashboard() {
               {pendingRequests.length > 0 && <div className="md-mentee-meta" style={{color:'#e8b84b'}}>{pendingRequests.length} pending</div>}
             </div>
           </div>
-          <div className={`md-mentee-row ${mainTab==='discover'?'active':''}`} onClick={() => setMainTab('discover')}>
-            <div className="mentee-nav-icon">🔍</div>
+          <div className="md-mentee-row" onClick={() => navigate('/discover')}>
+            <div className="tentee-nav-icon">🔍</div>
             <div className="md-mentee-name">Find a Mentor</div>
+          </div>
+          <div className={`md-mentee-row ${mainTab==='profile'?'active':''}`} onClick={() => setMainTab('profile')}>
+            <div className="tentee-nav-icon">👤</div>
+            <div className="md-mentee-name">My Profile</div>
           </div>
         </div>
         <div className="mentee-main">
@@ -238,7 +254,7 @@ export default function MenteeDashboard() {
         <div className="md-main-tabs">
           <button className={`md-main-tab ${mainTab==='sessions'?'active':''}`} onClick={()=>setMainTab('sessions')}>📋 Completed Meetings</button>
           <button className={`md-main-tab ${mainTab==='requests'?'active':''}`} onClick={()=>setMainTab('requests')}>📬 My Requests</button>
-          <button className={`md-main-tab ${mainTab==='discover'?'active':''}`} onClick={()=>setMainTab('discover')}>🔍 Find a Mentor</button>
+          <button className={`md-main-tab ${mainTab==='profile'?'active':''}`} onClick={()=>setMainTab('profile')}>👤 My Profile</button>
         </div>
 
         <div style={{display: mainTab==='sessions' ? 'block' : 'none'}}>
@@ -249,10 +265,33 @@ export default function MenteeDashboard() {
           </div>
         </div>
         <div style={{display: mainTab==='requests' ? 'block' : 'none'}}>
-          <MenteeRequestsTab embedded initialFilter={requestsFilter} />
+          <MenteeRequestsTab embedded initialFilter={requestsFilter} refreshTrigger={requestsRefresh} />
         </div>
-        <div style={{display: mainTab==='discover' ? 'block' : 'none'}}>
-          <DiscoverMentorsTab embedded />
+<div style={{display: mainTab==='profile' ? 'block' : 'none'}}>
+          <div className="mentee-profile-view">
+            <div className="mentee-profile-header">
+              <div className="mentee-profile-avatar">{profile?.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+              <div>
+                <div className="mentee-profile-name">{profile?.full_name}</div>
+                <div className="mentee-profile-email">{profile?.email}</div>
+                {profile?.tiering && <div className="mentee-profile-tier" style={{color: profile?.tiering === 'Accelerate' ? 'var(--accent)' : 'var(--green)'}}>{profile?.tiering}</div>}
+              </div>
+            </div>
+            <div className="mentee-profile-grid">
+              {profile?.company_name && <div className="mentee-profile-card"><div className="mentee-profile-label">🏭 Company</div><div className="mentee-profile-value">{profile.company_name}</div></div>}
+              {profile?.product && <div className="mentee-profile-card"><div className="mentee-profile-label">📦 Product</div><div className="mentee-profile-value">{profile.product}</div></div>}
+              {(profile?.location || profile?.state) && <div className="mentee-profile-card"><div className="mentee-profile-label">📍 Location</div><div className="mentee-profile-value">{profile?.location}{profile?.state ? ', '+profile.state : ''}</div></div>}
+              {profile?.revenue_lakhs && <div className="mentee-profile-card"><div className="mentee-profile-label">💰 Revenue</div><div className="mentee-profile-value">₹{profile.revenue_lakhs}L</div></div>}
+              {profile?.employee_count && <div className="mentee-profile-card"><div className="mentee-profile-label">👥 Employees</div><div className="mentee-profile-value">{profile.employee_count}</div></div>}
+              {profile?.theme && <div className="mentee-profile-card"><div className="mentee-profile-label">🎯 Theme</div><div className="mentee-profile-value">{profile.theme}</div></div>}
+            </div>
+            {profile?.problem_statement && (
+              <div className="mentee-profile-problem">
+                <div className="mentee-profile-label">💬 Problem Statement</div>
+                <div className="mentee-profile-problem-text">{profile.problem_statement}</div>
+              </div>
+            )}
+          </div>
         </div>
         </div>
       </div>

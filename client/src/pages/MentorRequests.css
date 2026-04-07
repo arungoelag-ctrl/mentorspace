@@ -105,3 +105,36 @@
 .mreq-respond-label { font-size: 11px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
 .mreq-respond-input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--card); font-family: var(--font-body); font-size: 13px; color: var(--text); outline: none; box-sizing: border-box; transition: border-color 0.15s; }
 .mreq-respond-input:focus { border-color: var(--accent); }
+
+/* ── Embedded mode ────────────────────────────────────────────── */
+.mreq-embedded { min-height: unset; padding: 0; background: transparent; }
+
+/* ── Find a Mentor button ─────────────────────────────────────── */
+.mreq-find-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6c74f7, #9c73f8);
+  color: #fff; border: none; border-radius: 10px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; margin-top: 12px;
+}
+.mreq-find-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(108,116,247,0.35); }
+
+/* ── Find a Mentor button ─────────────────────────────────────── */
+.mreq-find-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6c74f7, #9c73f8);
+  color: #fff; border: none; border-radius: 10px;
+  font-family: var(--font-body); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; margin-top: 12px;
+}
+.mreq-find-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(108,116,247,0.35); }
+
+/* ── Company about block ──────────────────────────────────────── */
+.mreq-company-about {
+  font-size: 13px; color: var(--text); line-height: 1.7;
+  padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 8px; font-style: italic;
+}
