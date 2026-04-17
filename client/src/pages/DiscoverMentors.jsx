@@ -61,6 +61,10 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
   const [matching, setMatching] = useState(false)
   const [matchSlots, setMatchSlots] = useState({}) // {mentorId: {avail, slot}}
   const [filterExpertise, setFilterExpertise] = useState([])
+  const [aiQuery, setAiQuery] = useState('')
+  const [aiSearching, setAiSearching] = useState(false)
+  const [aiResults, setAiResults] = useState(null)
+  const [aiTab, setAiTab] = useState('tier1')
   const [filterSector, setFilterSector] = useState([])
   const [filterLocation, setFilterLocation] = useState('')
   const [filterMarket, setFilterMarket] = useState('')
@@ -162,6 +166,36 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
     } finally { setMatching(false) }
   }
 
+  async function searchByQuery() {
+    if (!aiQuery.trim()) { setAiResults(null); return }
+    setAiSearching(true)
+    try {
+      const { data: mp } = await supabase.from('profiles').select('product,theme,problem_statement,state,location,revenue_lakhs').eq('email', user?.email).single()
+      const res = await fetch('/api/match-mentors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tiering: profile?.tiering || 'Liftoff',
+          product: mp?.product || aiQuery,
+          theme: mp?.theme || '',
+          problemStatement: aiQuery,
+          companyName: profile?.company_name || '',
+          state: mp?.state || '',
+          revenueLakhs: mp?.revenue_lakhs || '',
+          matchCount: 10
+        })
+      })
+      const data = await res.json()
+      setAiResults(data.matches || [])
+      setAiTab('tier1')
+      // Scroll to results
+      setTimeout(() => {
+        document.querySelector('.dm-mentor-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    } catch(e) { console.error(e) }
+    finally { setAiSearching(false) }
+  }
+
   function getMentorAvailability(mentorEmail) {
     return availability.filter(a => a.mentor_email === mentorEmail && a.slots.some(s => !s.booked))
   }
@@ -246,6 +280,13 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
               const mentorAvail = getMentorAvailability(mentor.email)
               return (
                 <div key={mentor.id} className="discover-match-card-v2" style={{cursor:"pointer"}} onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor) }}>
+                  {mentor.tier && (
+                    <div className={"dmv2-tier-bar dm-ai-tier-"+mentor.tier}>
+                      <span>{mentor.tier===1?'🏆 Strong Match':'🔍 Partial Match'}</span>
+                      {mentor.score && <span className="dm-ai-score">⭐ {mentor.score}/10</span>}
+                      {mentor.hands_on && <span style={{fontSize:10,color:mentor.hands_on==='Yes'?'#059669':mentor.hands_on==='Partial'?'#d97706':'#dc2626'}}>{mentor.hands_on==='Yes'?'🟢 Hands-on':mentor.hands_on==='Partial'?'🟡 Partial':'🔴 Advisory'}</span>}
+                    </div>
+                  )}
                   <div className="dmv2-top">
                     <div className="dmv2-rank">#{mentor.rank}</div>
                     <div className="dmv2-avatar" style={{background: COLORS[i % COLORS.length]}}>
@@ -280,7 +321,42 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
         </div>
       )}
 
-      <div className="dm-intel-filters">
+      <div className="dm-ai-search">
+        <div className="dm-ai-search-box">
+          <span className="dm-ai-search-icon">✨</span>
+          <input
+            className="dm-ai-search-input"
+            placeholder="Describe what you need help with… e.g. 'help scaling my leather export business to Europe'"
+            value={aiQuery}
+            onChange={e => { setAiQuery(e.target.value); if (!e.target.value) setAiResults(null) }}
+            onKeyDown={e => e.key === 'Enter' && searchByQuery()}
+          />
+          {aiQuery && (
+            <button className="dm-ai-search-clear" onClick={() => { setAiQuery(''); setAiResults(null) }}>✕</button>
+          )}
+          <button className="dm-ai-search-btn" onClick={searchByQuery} disabled={aiSearching}>
+            {aiSearching ? '⏳' : 'Find Mentors'}
+          </button>
+        </div>
+        {aiResults && (
+          <div className="dm-ai-results-header">
+            <div className="dm-ai-tabs">
+              <button className={"dm-ai-tab"+(aiTab==='tier1'?' active':'')} onClick={()=>setAiTab('tier1')}>
+                🏆 Strong Matches <span className="dm-ai-tab-count">{aiResults.filter(r=>r.tier===1).length}</span>
+              </button>
+              <button className={"dm-ai-tab"+(aiTab==='tier2'?' active':'')} onClick={()=>setAiTab('tier2')}>
+                🔍 Partial Matches <span className="dm-ai-tab-count">{aiResults.filter(r=>r.tier===2).length}</span>
+              </button>
+              <button className={"dm-ai-tab"+(aiTab==='all'?' active':'')} onClick={()=>setAiTab('all')}>
+                All {aiResults.length}
+              </button>
+            </div>
+            <button className="dm-ai-clear-link" onClick={() => { setAiQuery(''); setAiResults(null) }}>✕ Show all mentors</button>
+          </div>
+        )}
+      </div>
+
+      {!aiResults && (<div className="dm-intel-filters">
 
         <div className="dm-filter-row">
           <span className="dm-filter-label">EXPERTISE:</span>
@@ -346,7 +422,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
             ))}
           </div>
         </div>
-      </div>
+      </div>)}
 
       {matching && !matches && (
         <div className="dm-matching-loader"><div className="mreq-spinner"/> Finding your best matches…</div>
@@ -368,7 +444,13 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
         <div className="dm-mentor-grid">
           {/* Sort: mentors with full data first, test accounts last */}
           {/* This is handled by sorting the filtered array below */}
-          {mentors.filter(mentor => {
+          {(aiResults ? mentors.filter(m => {
+              const ar = aiResults.find(r => r.email === m.email)
+              if (!ar) return false
+              if (aiTab === 'tier1') return ar.tier === 1
+              if (aiTab === 'tier2') return ar.tier === 2
+              return true
+            }) : mentors).filter(mentor => {
               const exp = (mentor.primary_expertise + ' ' + (mentor.secondary_expertise||'')).toLowerCase()
               const ind = (mentor.primary_industry + ' ' + (mentor.secondary_industry||'')).toLowerCase()
               const loc = (mentor.location || '').toLowerCase()
@@ -385,6 +467,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
               <div key={mentor.id} id={'mentor-' + mentor.id}
                 className="dm-mentor-card"
                 onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor) }}>
+                {aiResults && (() => { const am = aiResults.find(r=>r.email===mentor.email); return am ? <div className={"dm-ai-match-bar dm-ai-tier-"+(am.tier||2)}><span>{am.tier===1?'🏆 Strong Match':'🔍 Partial Match'}</span><span className="dm-ai-score">⭐ {am.score}/10</span><span style={{fontSize:10,color:am.hands_on==='Yes'?'#059669':am.hands_on==='Partial'?'#d97706':'#dc2626'}}>{am.hands_on==='Yes'?'🟢 Hands-on':am.hands_on==='Partial'?'🟡 Partial':'🔴 Advisory'}</span></div> : null })()}
                 <div className="dm-mentor-card-top">
                   <div className="dm-mentor-tags">
                     {mentor.primary_industry && mentor.primary_industry !== '-' && <span className="dm-tag sector">{mentor.primary_industry}</span>}
@@ -495,6 +578,50 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
                 )}
               </div>
             </div>
+
+            {/* AI Match Scorecard */}
+            {aiResults && (() => {
+              const am = aiResults.find(r => r.email === modalMentor.email)
+              if (!am) return null
+              return (
+                <div className="dm-modal-scorecard">
+                  <div className="dm-modal-scorecard-header">
+                    <span className={"dm-modal-tier dm-modal-tier-"+(am.tier||2)}>
+                      {am.tier===1?'🏆 Strong Match':'🔍 Partial Match'}
+                    </span>
+                    <span className="dm-modal-score-total">⭐ {am.score}/10</span>
+                    <span style={{fontSize:12,fontWeight:600,color:am.hands_on==='Yes'?'#059669':am.hands_on==='Partial'?'#d97706':'#dc2626'}}>
+                      {am.hands_on==='Yes'?'🟢 Hands-on Operator':am.hands_on==='Partial'?'🟡 Partial Experience':'🔴 Advisory Only'}
+                    </span>
+                  </div>
+                  <div className="dm-modal-scorecard-grid">
+                    <div className="dm-modal-score-item">
+                      <div className="dm-modal-score-val">{am.industry_match_score}/3</div>
+                      <div className="dm-modal-score-label">Industry Match</div>
+                      {am.industry_match_reason && <div className="dm-modal-score-reason">{am.industry_match_reason}</div>}
+                    </div>
+                    <div className="dm-modal-score-item">
+                      <div className="dm-modal-score-val">{am.operator_score}/3</div>
+                      <div className="dm-modal-score-label">Operator Experience</div>
+                      {am.operator_reason && <div className="dm-modal-score-reason">{am.operator_reason}</div>}
+                    </div>
+                    <div className="dm-modal-score-item">
+                      <div className="dm-modal-score-val">{am.expertise_score}/2</div>
+                      <div className="dm-modal-score-label">Expertise</div>
+                      {am.expertise_reason && <div className="dm-modal-score-reason">{am.expertise_reason}</div>}
+                    </div>
+                    <div className="dm-modal-score-item">
+                      <div className="dm-modal-score-val">{am.credentials_score}/2</div>
+                      <div className="dm-modal-score-label">Key Credentials</div>
+                      {am.credentials_reason && <div className="dm-modal-score-reason">{am.credentials_reason}</div>}
+                    </div>
+                  </div>
+                  {am.match_reason && (
+                    <div className="dm-modal-match-reason">✅ {am.match_reason}</div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Bio */}
             {modalMentor.bio && (

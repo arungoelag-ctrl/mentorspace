@@ -138,3 +138,14 @@
   border: 1px solid var(--border); border-radius: 8px;
   margin-bottom: 8px; font-style: italic;
 }
+
+/* ── Pre-meeting Brief button ─────────────────────────────────── */
+.mreq-brief-btn {
+  padding: 7px 14px;
+  background: rgba(79,124,255,0.08);
+  border: 1px solid rgba(79,124,255,0.25);
+  border-radius: 8px; color: var(--accent);
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.mreq-brief-btn:hover { background: rgba(79,124,255,0.15); }

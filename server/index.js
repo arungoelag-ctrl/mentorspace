@@ -281,12 +281,27 @@ Respond ONLY with valid JSON, no markdown fences:
 }`
 
     const text = await callClaude(prompt)
-    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
-    const parsed = JSON.parse(clean)
-
-    // Save to DB (upsert by mentee+mentor so it overwrites stale briefs)
+    let clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    // Fix common JSON issues - truncated strings, special chars
+    clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+    let parsed
     try {
-      await supabase.from('pre_meeting_briefs').upsert({
+      parsed = JSON.parse(clean)
+    } catch(e) {
+      // Try to extract partial JSON
+      const match = clean.match(/\{[\s\S]*/)
+      if (match) {
+        try { parsed = JSON.parse(match[0] + '"}') } catch(e2) {
+          parsed = { brief_text: 'Brief generation failed. Please try again.', action_items: [], key_questions: [], red_flags: [], focus_areas: [], progress_summary: '' }
+        }
+      } else {
+        parsed = { brief_text: text.slice(0, 500), action_items: [], key_questions: [], red_flags: [], focus_areas: [], progress_summary: '' }
+      }
+    }
+
+    // Save to DB
+    try {
+      const briefRow = {
         mentee_name: menteeName,
         mentor_email: mentorEmail || null,
         meeting_request_id: requestId || null,
@@ -298,7 +313,12 @@ Respond ONLY with valid JSON, no markdown fences:
         progress_summary: parsed.progress_summary,
         company_stage: stage || null,
         created_at: new Date()
-      }, { onConflict: 'mentee_name,mentor_email' })
+      }
+      if (requestId) {
+        await supabase.from('pre_meeting_briefs').upsert(briefRow, { onConflict: 'meeting_request_id' })
+      } else {
+        await supabase.from('pre_meeting_briefs').insert(briefRow)
+      }
     } catch(e) { console.log('Brief save skipped:', e.message) }
 
     res.json({
@@ -337,7 +357,7 @@ async function callClaude(prompt) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }]
     })
   })
@@ -442,6 +462,9 @@ app.post('/api/sessions/:meetingId/end', async (req, res) => {
     await supabase.from('sessions').update({
       ended_at: new Date(), status: 'ended'
     }).eq('meeting_id', meetingId)
+
+    // Mark meeting request as completed
+    await supabase.from('meeting_requests').update({ status: 'completed' }).eq('zoom_meeting_id', meetingId)
 
     // Save final transcript
     if (transcript && transcript.length > 0) {
@@ -724,16 +747,61 @@ Respond ONLY with valid JSON, no markdown:
   }
 })
 
-// ─── MATCH MENTORS FOR A MENTEE (Claude-direct, no embeddings needed) ─────────
+// ─── ADMIN: DELETE MENTOR AUTH ACCOUNT ───────────────────────────────────────
+app.post('/api/admin/delete-mentor', async (req, res) => {
+  try {
+    const { userId } = req.body
+    const { error } = await supabase.auth.admin.deleteUser(userId)
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ success: true })
+  } catch(err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── ADMIN: CREATE MENTOR AUTH ACCOUNT ───────────────────────────────────────
+app.post('/api/admin/create-mentor', async (req, res) => {
+  try {
+    const { email, full_name } = req.body
+    const { data, error } = await supabase.auth.admin.createUser({
+      email, password: '12345678',
+      email_confirm: true,
+      user_metadata: { full_name }
+    })
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ id: data.user.id })
+  } catch(err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── EMBEDDING CACHE ─────────────────────────────────────────────────────────
+const embeddingCache = new Map()
+
+async function getQueryEmbedding(text) {
+  const key = text.trim().toLowerCase().slice(0, 200)
+  if (embeddingCache.has(key)) return embeddingCache.get(key)
+  const res = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 8000) })
+  })
+  const data = await res.json()
+  if (data.error) throw new Error(data.error.message)
+  const embedding = data.data[0].embedding
+  embeddingCache.set(key, embedding)
+  if (embeddingCache.size > 100) embeddingCache.delete(embeddingCache.keys().next().value)
+  return embedding
+}
+
+// ─── MATCH MENTORS FOR A MENTEE (Bio-based scoring, Tier 1/2 rubric) ──────────
 app.post('/api/match-mentors', async (req, res) => {
   try {
     const { tiering, product, theme, problemStatement, companyName, state, revenueLakhs, matchCount = 5, context = '' } = req.body
 
-    if (!tiering || !product) return res.status(400).json({ error: 'tiering and product required' })
+    if (!product && !problemStatement) return res.status(400).json({ error: 'product or problemStatement required' })
 
-    // Filter mentors by tiering rule:
-    // Liftoff mentees → Liftoff mentors only
-    // Accelerate mentees → Accelerate + Liftoff mentors
+    // Tiering filter
     let tieringFilter
     if (tiering === 'Liftoff') {
       tieringFilter = ['Liftoff', 'Ignite, Liftoff']
@@ -743,50 +811,174 @@ app.post('/api/match-mentors', async (req, res) => {
 
     const { data: mentors } = await supabase
       .from('profiles')
-      .select('id, full_name, email, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio')
+      .select('id, full_name, email, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio, job_title, current_company')
       .eq('role', 'mentor')
       .in('tiering', tieringFilter)
 
     if (!mentors || mentors.length === 0) return res.json({ matches: [] })
 
-    // Build concise mentor list for Claude
-    const mentorList = mentors.map((m, i) =>
-      `${i+1}|${m.full_name}|${m.primary_expertise || ''}|${m.secondary_expertise || ''}|${m.primary_industry || ''}|${m.secondary_industry || ''}|${m.tiering}|${m.location || ''}|${m.years_experience || ''}yr`
-    ).join('\n')
+    // Step 1: Semantic pre-filter using OpenAI embeddings + pgvector
+    const queryText = `${product} ${theme || ''} ${problemStatement || ''} ${companyName || ''} ${state || ''}`.trim()
+    let candidates
 
-    const prompt = `You are an expert-matching specialist at Wadhwani Foundation helping connect businesses with the right mentors/experts.
+    try {
+      const queryEmbedding = await getQueryEmbedding(queryText)
 
-MENTEE BUSINESS:
-- Company: ${companyName || 'N/A'}
-- Product: ${product}
-- State: ${state || 'N/A'}
-- Revenue: ${revenueLakhs ? revenueLakhs + 'L INR' : 'N/A'}
-- Program: ${tiering}
-- Theme: ${theme || 'N/A'}
-- Problem: ${problemStatement || 'N/A'}
+      // Use pgvector cosine similarity to find top 30 mentors
+      const { data: semResults, error: semErr } = await supabase.rpc('match_mentors_by_embedding', {
+        query_embedding: queryEmbedding,
+        tiering_filter: tieringFilter,
+        match_count: 30
+      })
+      if (semErr) throw new Error(semErr.message)
+      if (!semResults || semResults.length === 0) throw new Error('No semantic results')
 
-AVAILABLE MENTORS (index|name|primary_expertise|secondary_expertise|primary_industry|secondary_industry|tiering|location|experience):
-${mentorList}
+      // Get full profiles for semantic matches
+      const ids = semResults.map(r => r.id)
+      const { data: fullProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio, job_title, current_company')
+        .in('id', ids)
+      candidates = fullProfiles || []
+      console.log('Semantic search: found', candidates.length, 'candidates')
+    } catch(embErr) {
+      console.log('Embedding search failed, falling back to keyword:', embErr.message)
+      const founderContext = queryText.toLowerCase()
+      const keywords = founderContext.split(/\s+/).filter(w => w.length > 3)
+      const scored = mentors.map(m => {
+        let score = 0
+        const bioText = (m.bio || '').replace(/<[^>]+>/g, ' ').toLowerCase()
+        const structuredFields = `${m.primary_expertise || ''} ${m.secondary_expertise || ''} ${m.primary_industry || ''} ${m.secondary_industry || ''} ${m.job_title || ''} ${m.current_company || ''}`.toLowerCase()
+        keywords.forEach(word => {
+          if (structuredFields.includes(word)) score += 2
+          if (bioText.includes(word)) score += 2
+        })
+        return { ...m, _pre_score: score }
+      })
+      scored.sort((a, b) => b._pre_score - a._pre_score)
+      candidates = scored.slice(0, 30)
+    }
 
-Pick the TOP 5 mentors who best match this business based on their expertise and industry fit with the mentee's product, problem and theme.
+    // Step 2: Build rich mentor profiles using bio for Claude
+    const mentorProfiles = candidates.map((m, i) => {
+      const bio = (m.bio || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
+      return `EXPERT ${i+1}: ${m.full_name}
+Designation: ${m.job_title || ''} at ${m.current_company || ''}
+Expertise: ${m.primary_expertise || ''}${m.secondary_expertise ? ', ' + m.secondary_expertise : ''}
+Industry: ${m.primary_industry || ''}${m.secondary_industry ? ', ' + m.secondary_industry : ''}
+Experience: ${m.years_experience || '?'} years
+Bio: ${bio}`
+    }).join('\n\n---\n\n')
 
-Respond ONLY with valid JSON array:
+    const systemPrompt = `You are an AI expert-matching assistant for Resources Network, helping Indian founders find the most suitable experts from a curated database.
+
+CORE RULES YOU ALWAYS FOLLOW:
+- Industry match alone is NOT enough for Tier 1
+- Hands-on operator experience alone is NOT enough for Tier 1
+- BOTH must be present for Tier 1
+- When in doubt -> Tier 2, not Tier 1
+- Never assume industry match if not clearly stated in the profile
+
+KEY HANDS-ON RULE:
+- Be honest — do not mark Yes for hands-on just because the expert is impressive
+- Yes = personally done it on the ground as an operator
+- Partial = advised / consulted / taught — not done directly
+- No = no relevant experience in this area
+
+MINIMUM RESULT RULES:
+- You MUST always return at least 1 result total across both tiers
+- Never return an empty array — always surface the best available option`
+
+    const userPrompt = `You are helping an Indian founder find the right expert.
+
+Founder's business brief and problem statement:
+"${companyName ? 'Company: ' + companyName + '. ' : ''}Product/Service: ${product}. ${state ? 'Location: ' + state + '. ' : ''}${revenueLakhs ? 'Revenue: ₹' + revenueLakhs + 'L. ' : ''}${theme ? 'Theme: ' + theme + '. ' : ''}Problem: ${problemStatement || 'General business growth and scaling.'}"
+
+Here are expert profiles to evaluate:
+
+${mentorProfiles}
+
+TIER CLASSIFICATION RULES:
+
+TIER 1 — Strong Match (min 1, max 5):
+Condition 1 — Industry Match: Expert has directly worked IN the same or very closely related industry. Not just advised — actually worked in it as an operator, founder, or senior leader.
+Condition 2 — Operator Experience: Expert has PERSONALLY done the specific task or solved the specific problem the founder is facing. Not consulting, not teaching, not advising — done it themselves.
+If even ONE condition is missing -> Tier 2, NOT Tier 1.
+
+TIER 2 — Partial Match (max 5):
+- Matches industry but lacks operator experience
+- Has operator experience but from a different industry
+- Has strong relevant expertise useful to the founder
+
+SCORING:
+- Industry Match: 3 points (3=direct, 2=adjacent, 1=advised, 0=none)
+- Operator Experience: 3 points (3=personally done exact task, 2=closely related, 1=advised/taught, 0=none)
+- Relevant Expertise: 2 points
+- Key Credentials: 2 points
+
+Return ONLY a JSON array of the top ${matchCount} experts across both tiers (Tier 1 first, then Tier 2). No extra text.
+
 [
-  {"index": 1, "match_reason": "1-2 sentence specific reason why this mentor fits"},
-  {"index": 3, "match_reason": "..."},
-  {"index": 7, "match_reason": "..."},
-  {"index": 12, "match_reason": "..."},
-  {"index": 15, "match_reason": "..."}
+  {
+    "index": <1-based index from list above>,
+    "tier": 1,
+    "score": <total out of 10>,
+    "industry_match_score": <0-3>,
+    "operator_score": <0-3>,
+    "expertise_score": <0-2>,
+    "expertise_reason": "<1 line on relevant expertise>",
+    "credentials_score": <0-2>,
+    "credentials_reason": "<1 line on key credentials>",
+    "hands_on": "Yes|Partial|No",
+    "industry_match_reason": "<1 line why industry matches>",
+    "operator_reason": "<1 line on personal operator experience>",
+    "match_reason": "<2-3 sentence overall why this expert fits the founder>"
+  }
 ]`
 
-    const text = await callClaude(prompt)
+    const messages = [
+      { role: 'user', content: userPrompt }
+    ]
+
+    // Call Claude with system prompt
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        system: systemPrompt,
+        messages
+      })
+    })
+    const data = await response.json()
+    const text = data.content?.[0]?.text || ''
     const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
     const rankings = JSON.parse(clean)
 
     const matches = rankings.map((r, rank) => {
-      const mentor = mentors[r.index - 1]
+      const mentor = candidates[r.index - 1]
       if (!mentor) return null
-      return { ...mentor, rank: rank + 1, match_reason: r.match_reason }
+      return {
+        ...mentor,
+        rank: rank + 1,
+        tier: r.tier,
+        score: r.score,
+        industry_match_score: r.industry_match_score,
+        operator_score: r.operator_score,
+        expertise_score: r.expertise_score,
+        expertise_reason: r.expertise_reason,
+        credentials_score: r.credentials_score,
+        credentials_reason: r.credentials_reason,
+        hands_on: r.hands_on,
+        industry_match_reason: r.industry_match_reason,
+        operator_reason: r.operator_reason,
+        match_reason: r.match_reason
+      }
     }).filter(Boolean)
 
     res.json({ matches, total_candidates: mentors.length })

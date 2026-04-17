@@ -8,6 +8,7 @@ import MenteeDashboard from './pages/MenteeDashboard'
 import NewSession from './pages/NewSession'
 import Session from './pages/Session'
 import IntelligenceDashboard from './pages/IntelligenceDashboard'
+import RNManagerDashboard from './pages/RNManagerDashboard'
 import MentorAvailability from './pages/MentorAvailability'
 import DiscoverMentors from './pages/DiscoverMentors'
 import MentorRequests from './pages/MentorRequests'
@@ -26,6 +27,7 @@ function Dashboard() {
   if (profile?.role === 'mentor') return <MentorDashboard />
   if (profile?.role === 'venture_partner') return <MentorDashboard />
   if (profile?.role === 'mentee') return <MenteeDashboard />
+  if (profile?.role === 'rn_manager') return <RNManagerDashboard />
   // Default fallback while profile loads
   return <MentorDashboard />
 }

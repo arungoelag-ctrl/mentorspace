@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -14,6 +15,10 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
   const [selected, setSelected] = useState(null)
   const [briefCache, setBriefCache] = useState({})
   const [briefLoading, setBriefLoading] = useState(false)
+  const [briefModal, setBriefModal] = useState(null) // {req, brief}
+  const [briefModalLoading, setBriefModalLoading] = useState(false)
+  const [briefModalCache, setBriefModalCache] = useState({})
+  const briefCacheRef = React.useRef({})
   const [menteeProfile, setMenteeProfile] = useState(null)
   const [brief, setBrief] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -27,6 +32,21 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
   useEffect(() => { if (profile) fetchRequests() }, [profile])
   useEffect(() => { setFilterStatus(initialFilter) }, [initialFilter])
 
+  async function preloadBriefs(reqs) {
+    const accepted = reqs.filter(r => r.status === 'accepted')
+    for (const req of accepted) {
+      if (briefCacheRef.current[req.id]) continue
+      try {
+        const { data: saved } = await supabase.from('pre_meeting_briefs')
+          .select('*').eq('meeting_request_id', req.id).single()
+        if (saved) {
+          const brief = { brief_text: saved.brief_text, action_items: saved.action_items, key_questions: saved.key_questions, red_flags: saved.red_flags, focus_areas: saved.focus_areas, progress_summary: saved.progress_summary }
+          setBriefModalCache(prev => ({...prev, [req.id]: brief}))
+        }
+      } catch(e) {}
+    }
+  }
+
   async function fetchRequests() {
     setLoading(true)
     try {
@@ -35,6 +55,47 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
         .order('created_at', { ascending: false })
       setRequests(data || [])
     } finally { setLoading(false) }
+  }
+
+  async function openBriefModal(req, e) {
+    e.stopPropagation()
+    // Check cache first
+    const cached = briefCacheRef.current[req.id] || briefModalCache[req.id]
+    if (cached) {
+      setBriefModal({ req, brief: cached })
+      return
+    }
+    setBriefModal({ req, brief: null })
+    setBriefModalLoading(true)
+    try {
+      // Check pre_meeting_briefs table first
+      const { data: saved } = await supabase.from('pre_meeting_briefs')
+        .select('*').eq('meeting_request_id', req.id).single()
+      if (saved) {
+        const brief = { brief_text: saved.brief_text, action_items: saved.action_items, key_questions: saved.key_questions, red_flags: saved.red_flags, focus_areas: saved.focus_areas, progress_summary: saved.progress_summary }
+        briefCacheRef.current[req.id] = brief
+        setBriefModalCache(prev => ({...prev, [req.id]: brief}))
+        setBriefModal({ req, brief })
+        return
+      }
+      // Fetch mentee profile
+      const { data: mp } = await supabase.from('profiles').select('product,state,location,revenue_lakhs,employee_count,theme,problem_statement').eq('email', req.mentee_email).single()
+      const res = await fetch('/api/brief-with-context/' + encodeURIComponent(req.mentee_name) + '?' + new URLSearchParams({
+        companyName: req.company_name, mentorEmail: user?.email,
+        stage: req.company_stage, goal: req.meeting_goal, requestId: req.id,
+        product: mp?.product||'', location: mp?.location||'', state: mp?.state||'',
+        revenueLakhs: mp?.revenue_lakhs||'', employeeCount: mp?.employee_count||'',
+        theme: mp?.theme||'', companyInfo: req.company_info||''
+      }))
+      const data = await res.json()
+      const brief = data?.brief
+      if (brief) {
+        briefCacheRef.current[req.id] = brief
+        setBriefModalCache(prev => ({...prev, [req.id]: brief}))
+        setBriefModal({ req, brief })
+      }
+    } catch(e) { console.error(e) }
+    finally { setBriefModalLoading(false) }
   }
 
   async function loadBrief(req) {
@@ -232,6 +293,7 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
                 <div className="mreq-zoom-bar">
                   <span>ID: <strong>{req.zoom_meeting_id}</strong></span>
                   {req.zoom_password && <span>PW: <strong>{req.zoom_password}</strong></span>}
+                  <button className="mreq-brief-btn" onClick={e => openBriefModal(req, e)}>📋 Pre-meeting Brief</button>
                   <button className="mreq-join-btn" onClick={e => {
                     e.stopPropagation()
                     const s = { meetingNumber: req.zoom_meeting_id, password: req.zoom_password || '', topic: req.company_name, mentorName: profile?.full_name, menteeName: req.mentee_name, role: 1 }
@@ -375,6 +437,66 @@ export default function MentorRequests({ embedded = false, initialFilter = 'pend
           </div>
         )}
       </div>
+
+      {briefModal && createPortal(
+        <div onClick={()=>setBriefModal(null)} style={{position:'fixed',inset:0,background:'rgba(10,15,40,0.55)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:16,width:'100%',maxWidth:620,maxHeight:'85vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 80px rgba(0,0,0,0.2)'}}>
+            <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #eee',display:'flex',alignItems:'center',justifyContent:'space-between',background:'linear-gradient(135deg,rgba(79,124,255,0.05),rgba(155,114,255,0.02))'}}>
+              <div>
+                <div style={{fontSize:16,fontWeight:600,color:'#1a2b3c'}}>📋 Pre-meeting Brief</div>
+                <div style={{fontSize:11,color:'#8a9bb0',marginTop:2}}>{briefModal.req.mentee_name} · {briefModal.req.company_name} · {briefModal.req.requested_date}</div>
+              </div>
+              <button onClick={()=>setBriefModal(null)} style={{width:30,height:30,borderRadius:8,border:'1px solid #eee',background:'#f8f8f8',cursor:'pointer',fontSize:13}}>✕</button>
+            </div>
+            <div style={{overflowY:'auto',padding:20,display:'flex',flexDirection:'column',gap:14}}>
+              {briefModalLoading ? (
+                <div style={{display:'flex',alignItems:'center',gap:10,color:'#8a9bb0',padding:20}}><div className="mreq-spinner"/> Loading brief…</div>
+              ) : !briefModal.brief ? (
+                <div style={{color:'#8a9bb0',textAlign:'center',padding:20}}>No brief available</div>
+              ) : (<>
+                {briefModal.brief.progress_summary && (
+                  <div>
+                    <div style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#8a9bb0',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>📈 Progress</div>
+                    <div style={{fontSize:13,color:'#2d3748',lineHeight:1.7}}>{briefModal.brief.progress_summary}</div>
+                  </div>
+                )}
+                {briefModal.brief.red_flags?.filter(f=>f).length > 0 && (
+                  <div style={{background:'rgba(240,96,96,0.05)',border:'1px solid rgba(240,96,96,0.2)',borderRadius:10,padding:'12px 14px'}}>
+                    <div style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#e05555',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>🚩 Red Flags</div>
+                    {briefModal.brief.red_flags.map((f,i) => <div key={i} style={{fontSize:12,color:'#c0392b',padding:'3px 0'}}>⚠ {f}</div>)}
+                  </div>
+                )}
+                {briefModal.brief.brief_text && (
+                  <div>
+                    <div style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#8a9bb0',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>📝 Overview</div>
+                    <div style={{fontSize:13,color:'#2d3748',lineHeight:1.7}}>{briefModal.brief.brief_text}</div>
+                  </div>
+                )}
+                {briefModal.brief.focus_areas?.length > 0 && (
+                  <div>
+                    <div style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#8a9bb0',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>🎯 Focus Areas</div>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                      {briefModal.brief.focus_areas.map((a,i) => <span key={i} style={{fontSize:11,fontFamily:'monospace',padding:'3px 10px',background:'rgba(79,124,255,0.08)',border:'1px solid rgba(79,124,255,0.18)',borderRadius:99,color:'#4f7cff'}}>{a}</span>)}
+                    </div>
+                  </div>
+                )}
+                {briefModal.brief.key_questions?.length > 0 && (
+                  <div>
+                    <div style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#8a9bb0',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>💡 Key Questions</div>
+                    {briefModal.brief.key_questions.map((q,i) => (
+                      <div key={i} style={{display:'flex',gap:8,padding:'6px 0',borderBottom:'1px solid #f0f0f0',fontSize:13,color:'#2d3748'}}>
+                        <span style={{width:20,height:20,borderRadius:'50%',background:'rgba(79,124,255,0.1)',color:'#4f7cff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1}}>{i+1}</span>
+                        <span>{q}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>)}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
