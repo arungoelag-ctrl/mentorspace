@@ -65,6 +65,9 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
   const [aiSearching, setAiSearching] = useState(false)
   const [aiResults, setAiResults] = useState(null)
   const [aiTab, setAiTab] = useState('tier1')
+  const [scoreCache, setScoreCache] = useState({})
+  const [scoringMentor, setScoringMentor] = useState(null)
+  const [matchTab, setMatchTab] = useState('tier1')
   const [filterSector, setFilterSector] = useState([])
   const [filterLocation, setFilterLocation] = useState('')
   const [filterMarket, setFilterMarket] = useState('')
@@ -100,7 +103,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
   }, [profile])
 
   async function fetchData() {
-    setLoading(true)
+    // Don't block UI - load in background
     try {
       const { data: mentorData } = await supabase.from('profiles').select('*').in('role', ['mentor', 'venture_partner'])
       setMentors(mentorData || [])
@@ -142,7 +145,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
     setMatching(true)
     setShowMatches(false)
     try {
-      const res = await fetch('/api/match-mentors', {
+      const res = await fetch('/api/match-mentors-fast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -152,18 +155,72 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
           problemStatement: profile.problem_statement,
           companyName: profile.company_name,
           state: profile.state,
-          revenueLakhs: profile.revenue_lakhs
+          revenueLakhs: profile.revenue_lakhs,
+          matchCount: 6
         })
       })
       const data = await res.json()
       const m = data.matches || []
       setMatches(m)
       setShowMatches(true)
+      setMatchTab('tier1')
       if (onMatchCacheUpdate) onMatchCacheUpdate(m)
-      try { sessionStorage.setItem('mentorMatches', JSON.stringify(m)) } catch(e) {}
+      try { sessionStorage.setItem('mentorMatches', JSON.stringify(m)); sessionStorage.setItem('mentorMatchesProfileId', profile?.id || '') } catch(e) {}
     } catch(e) {
       console.error('Match error:', e)
     } finally { setMatching(false) }
+  }
+
+  async function loadMentorScore(mentor) {
+    // Check React state first
+    if (scoreCache[mentor.email]) return
+    // Check sessionStorage as fallback (persists across navigation)
+    try {
+      const s = JSON.parse(sessionStorage.getItem('mentorScores') || '{}')
+      if (s[mentor.email]) {
+        setScoreCache(prev => ({...prev, [mentor.email]: s[mentor.email]}))
+        return
+      }
+    } catch(e) {}
+    setScoringMentor(mentor.email)
+    try {
+      const { data: mp } = await supabase.from('profiles').select('product,theme,problem_statement,state,revenue_lakhs').eq('email', user?.email).single()
+      const res = await fetch('/api/score-mentor', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          mentorEmail: mentor.email,
+          product: mp?.product || aiQuery || '',
+          problemStatement: aiQuery || mp?.problem_statement || mp?.product || '',
+          companyName: profile?.company_name || '',
+          state: mp?.state || mp?.location || '',
+          revenueLakhs: mp?.revenue_lakhs || '',
+          theme: mp?.theme || '',
+          context: aiQuery || mp?.problem_statement || ''
+        })
+      })
+      const data = await res.json()
+      if (data.score) {
+        const score = data.score
+        setScoreCache(prev => ({...prev, [mentor.email]: score}))
+        try { const s = JSON.parse(sessionStorage.getItem('mentorScores')||'{}'); s[mentor.email]=score; sessionStorage.setItem('mentorScores',JSON.stringify(s)) } catch(e) {}
+        // Update cards with Claude score but keep original tier from fast endpoint
+        setAiResults(prev => prev ? prev.map(m => m.email === mentor.email
+          ? {...m, score: score.score, hands_on: score.hands_on, match_reason: score.match_reason}
+          : m).sort((a,b) => (a.tier||2)-(b.tier||2) || (b.score||0)-(a.score||0))
+          : prev)
+        setMatches(prev => {
+          if (!prev) return prev
+          const updated = prev.map(m => m.email === mentor.email
+            ? {...m, score: score.score, hands_on: score.hands_on, match_reason: score.match_reason}
+            : m).sort((a,b) => (a.tier||2)-(b.tier||2) || (b.score||0)-(a.score||0))
+          // Persist updated matches so they survive navigation
+          try { sessionStorage.setItem('mentorMatches', JSON.stringify(updated)) } catch(e) {}
+          return updated
+        })
+      }
+    } catch(e) { console.error(e) }
+    finally { setScoringMentor(null) }
   }
 
   async function searchByQuery() {
@@ -171,7 +228,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
     setAiSearching(true)
     try {
       const { data: mp } = await supabase.from('profiles').select('product,theme,problem_statement,state,location,revenue_lakhs').eq('email', user?.email).single()
-      const res = await fetch('/api/match-mentors', {
+      const res = await fetch('/api/match-mentors-fast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,15 +328,26 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
           <div className="discover-matches-header">
             <div>
               <div className="discover-matches-title">AI Recommended Mentors</div>
-              <div className="discover-matches-sub">{matches.length} best matches · based on your product, industry and goals</div>
+              <div className="discover-matches-sub">3 strong + 3 partial matches · based on your product, industry and goals</div>
+              <div className="dm-ai-tabs" style={{marginTop:8}}>
+                <button className={"dm-ai-tab"+(matchTab==='tier1'?' active':'')} onClick={()=>setMatchTab('tier1')}>
+                  🏆 Strong Matches <span className="dm-ai-tab-count">{matches.filter(m=>m.tier===1).length}</span>
+                </button>
+                <button className={"dm-ai-tab"+(matchTab==='tier2'?' active':'')} onClick={()=>setMatchTab('tier2')}>
+                  🔍 Partial Matches <span className="dm-ai-tab-count">{matches.filter(m=>m.tier===2).length}</span>
+                </button>
+                <button className={"dm-ai-tab"+(matchTab==='all'?' active':'')} onClick={()=>setMatchTab('all')}>
+                  All {matches.length}
+                </button>
+              </div>
             </div>
             <button className="discover-matches-close" onClick={() => setShowMatches(false)}>✕</button>
           </div>
           <div className="discover-matches-grid">
-            {matches.map((mentor, i) => {
+            {matches.filter(m => matchTab==='all' || (matchTab==='tier1'&&m.tier===1) || (matchTab==='tier2'&&m.tier===2)).sort((a,b) => (b.score||0)-(a.score||0)).map((mentor, i) => {
               const mentorAvail = getMentorAvailability(mentor.email)
               return (
-                <div key={mentor.id} className="discover-match-card-v2" style={{cursor:"pointer"}} onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor) }}>
+                <div key={mentor.id} className="discover-match-card-v2" style={{cursor:"pointer"}} onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor); loadMentorScore(mentor) }}>
                   {mentor.tier && (
                     <div className={"dmv2-tier-bar dm-ai-tier-"+mentor.tier}>
                       <span>{mentor.tier===1?'🏆 Strong Match':'🔍 Partial Match'}</span>
@@ -305,9 +373,11 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
                   <div className="dmv2-reason">{mentor.match_reason}</div>
                   <div className="dmv2-tags">
                     {mentor.years_experience && <span className="dmv2-tag">{mentor.years_experience}yr exp</span>}
-                    {mentor.is_founder && <span className="dmv2-tag">Founder</span>}
-                    {mentor.is_serial_entrepreneur && <span className="dmv2-tag">Serial Entrepreneur</span>}
-                    {mentor.is_angel_investor && <span className="dmv2-tag">Angel Investor</span>}
+                    {mentor.location && <span className="dmv2-tag">📍 {mentor.location.split(',')[0]}</span>}
+                    {mentor.is_founder && <span className="dmv2-tag highlight">Founder</span>}
+                    {mentor.is_serial_entrepreneur && <span className="dmv2-tag highlight">Serial Entrepreneur</span>}
+                    {mentor.is_angel_investor && <span className="dmv2-tag highlight">Angel Investor</span>}
+                    {mentor.has_international_exp && <span className="dmv2-tag">🌍 Intl Exp</span>}
                   </div>
                   <div className="dmv2-footer">
                     {mentorAvail.length > 0
@@ -428,36 +498,42 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
         <div className="dm-matching-loader"><div className="mreq-spinner"/> Finding your best matches…</div>
       )}
 
-      {loading ? <div className="avail-loading">Loading mentors…</div> : (
+      {(
         <>
         <div className="dm-section-heading">
-          <div className="dm-section-title">All Mentors</div>
-          <div className="dm-section-sub">{mentors.filter(m => {
+          <div className="dm-section-title">{aiResults ? 'AI Matched Mentors' : 'All Mentors'}</div>
+          <div className="dm-section-sub">{aiResults ? `${aiResults.length} mentors matched` : mentors.filter(m => {
             const exp = ((m.primary_expertise||'') + ' ' + (m.secondary_expertise||'')).toLowerCase()
             const ind = ((m.primary_industry||'') + ' ' + (m.secondary_industry||'')).toLowerCase()
             const loc = (m.location||'').toLowerCase()
             return (filterExpertise.length===0 || filterExpertise.every(f => exp.includes(f.toLowerCase())))
               && (filterSector.length===0 || filterSector.some(f => ind.includes(f.toLowerCase())))
               && (!filterLocation || loc.includes(filterLocation.toLowerCase()))
-          }).length} mentors</div>
+          }).length + ' mentors'}</div>
         </div>
         <div className="dm-mentor-grid">
           {/* Sort: mentors with full data first, test accounts last */}
           {/* This is handled by sorting the filtered array below */}
-          {(aiResults ? mentors.filter(m => {
-              const ar = aiResults.find(r => r.email === m.email)
-              if (!ar) return false
-              if (aiTab === 'tier1') return ar.tier === 1
-              if (aiTab === 'tier2') return ar.tier === 2
+          {(aiResults ? aiResults.filter(m => {
+              if (aiTab === 'tier1') return m.tier === 1
+              if (aiTab === 'tier2') return m.tier === 2
               return true
             }) : mentors).filter(mentor => {
-              const exp = (mentor.primary_expertise + ' ' + (mentor.secondary_expertise||'')).toLowerCase()
-              const ind = (mentor.primary_industry + ' ' + (mentor.secondary_industry||'')).toLowerCase()
+              if (aiResults) return true
+              const exp = ((mentor.primary_expertise||'') + ' ' + (mentor.secondary_expertise||'')).toLowerCase()
+              const ind = ((mentor.primary_industry||'') + ' ' + (mentor.secondary_industry||'')).toLowerCase()
               const loc = (mentor.location || '').toLowerCase()
               return (filterExpertise.length===0 || filterExpertise.every(f => exp.includes(f.toLowerCase())))
                 && (filterSector.length===0 || filterSector.some(f => ind.includes(f.toLowerCase())))
                 && (!filterLocation || loc.includes(filterLocation.toLowerCase()))
             }).sort((a, b) => {
+              if (aiResults) {
+                const am = aiResults.find(r=>r.email===a.email)
+                const bm = aiResults.find(r=>r.email===b.email)
+                if (am && bm) return (bm.score||0)-(am.score||0)
+                if (am) return -1
+                if (bm) return 1
+              }
               const aHasData = a.primary_industry && a.primary_expertise ? 1 : 0
               const bHasData = b.primary_industry && b.primary_expertise ? 1 : 0
               return bHasData - aHasData
@@ -466,7 +542,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
             return (
               <div key={mentor.id} id={'mentor-' + mentor.id}
                 className="dm-mentor-card"
-                onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor) }}>
+                onClick={() => { const avail = getMentorAvailability(mentor.email); const first = avail[0]||null; setModalMentor(mentor); setModalDate(first); setSelectedAvail(first); setSelectedSlot(null); setSelected(mentor); loadMentorScore(mentor) }}>
                 {aiResults && (() => { const am = aiResults.find(r=>r.email===mentor.email); return am ? <div className={"dm-ai-match-bar dm-ai-tier-"+(am.tier||2)}><span>{am.tier===1?'🏆 Strong Match':'🔍 Partial Match'}</span><span className="dm-ai-score">⭐ {am.score}/10</span><span style={{fontSize:10,color:am.hands_on==='Yes'?'#059669':am.hands_on==='Partial'?'#d97706':'#dc2626'}}>{am.hands_on==='Yes'?'🟢 Hands-on':am.hands_on==='Partial'?'🟡 Partial':'🔴 Advisory'}</span></div> : null })()}
                 <div className="dm-mentor-card-top">
                   <div className="dm-mentor-tags">
@@ -485,6 +561,7 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
                   </div>
                   <div style={{flex:1}}>
                     <div className="dm-mentor-name">{mentor.full_name}</div>
+                    {mentor.current_company && <div style={{fontSize:11,color:'var(--muted)',marginTop:1}}>{mentor.job_title ? mentor.job_title+' · ' : ''}{mentor.current_company}</div>}
                     <div className="dm-mentor-exp">{mentor.primary_expertise}{mentor.secondary_expertise ? ' · ' + mentor.secondary_expertise : ''}</div>
                     {mentor.years_experience && <div className="dm-mentor-yrs">{mentor.years_experience}yr exp</div>}
                   </div>
@@ -580,9 +657,11 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
             </div>
 
             {/* AI Match Scorecard */}
-            {aiResults && (() => {
-              const am = aiResults.find(r => r.email === modalMentor.email)
-              if (!am) return null
+            {(() => {
+              const am = scoreCache[modalMentor.email] || (aiResults || []).find(r => r.email === modalMentor.email) || (matches || []).find(r => r.email === modalMentor.email)
+              if (!am) return scoringMentor === modalMentor.email
+                ? <div style={{padding:'10px 14px',background:'rgba(79,124,255,0.05)',borderRadius:10,fontSize:12,color:'var(--muted)',display:'flex',alignItems:'center',gap:8,marginBottom:12}}><div className="mreq-spinner"/>Loading match analysis…</div>
+                : null
               return (
                 <div className="dm-modal-scorecard">
                   <div className="dm-modal-scorecard-header">
@@ -595,26 +674,24 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
                     </span>
                   </div>
                   <div className="dm-modal-scorecard-grid">
-                    <div className="dm-modal-score-item">
-                      <div className="dm-modal-score-val">{am.industry_match_score}/3</div>
-                      <div className="dm-modal-score-label">Industry Match</div>
-                      {am.industry_match_reason && <div className="dm-modal-score-reason">{am.industry_match_reason}</div>}
-                    </div>
-                    <div className="dm-modal-score-item">
-                      <div className="dm-modal-score-val">{am.operator_score}/3</div>
-                      <div className="dm-modal-score-label">Operator Experience</div>
-                      {am.operator_reason && <div className="dm-modal-score-reason">{am.operator_reason}</div>}
-                    </div>
-                    <div className="dm-modal-score-item">
-                      <div className="dm-modal-score-val">{am.expertise_score}/2</div>
-                      <div className="dm-modal-score-label">Expertise</div>
-                      {am.expertise_reason && <div className="dm-modal-score-reason">{am.expertise_reason}</div>}
-                    </div>
-                    <div className="dm-modal-score-item">
-                      <div className="dm-modal-score-val">{am.credentials_score}/2</div>
-                      <div className="dm-modal-score-label">Key Credentials</div>
-                      {am.credentials_reason && <div className="dm-modal-score-reason">{am.credentials_reason}</div>}
-                    </div>
+                    {[
+                      {val: am.industry_match_score, max: 3, label: 'Industry Match', reason: am.industry_match_reason},
+                      {val: am.operator_score, max: 3, label: 'Operator Experience', reason: am.operator_reason},
+                      {val: am.expertise_score, max: 2, label: 'Expertise', reason: am.expertise_reason},
+                      {val: am.credentials_score, max: 2, label: 'Key Credentials', reason: am.credentials_reason}
+                    ].map(item => (
+                      <div key={item.label} className="dm-modal-score-item">
+                        {item.val !== undefined
+                          ? <div className="dm-modal-score-val">{item.val}/{item.max}</div>
+                          : <div className="dm-modal-score-val dm-score-loading"><div className="mreq-spinner" style={{width:16,height:16}}/></div>
+                        }
+                        <div className="dm-modal-score-label">{item.label}</div>
+                        {item.reason
+                          ? <div className="dm-modal-score-reason">{item.reason}</div>
+                          : item.val === undefined && <div className="dm-modal-score-reason" style={{color:'#cbd5e1'}}>Analyzing…</div>
+                        }
+                      </div>
+                    ))}
                   </div>
                   {am.match_reason && (
                     <div className="dm-modal-match-reason">✅ {am.match_reason}</div>

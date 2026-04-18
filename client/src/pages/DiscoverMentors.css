@@ -642,3 +642,12 @@
 .dmv2-tier-bar { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 8px 8px 0 0; margin: -12px -12px 10px -12px; font-size: 11px; font-weight: 600; flex-wrap: wrap; }
 .dmv2-tier-bar.dm-ai-tier-1 { background: linear-gradient(135deg,rgba(5,150,105,0.12),rgba(5,150,105,0.06)); border-bottom: 1px solid rgba(5,150,105,0.2); color: #065f46; }
 .dmv2-tier-bar.dm-ai-tier-2 { background: linear-gradient(135deg,rgba(79,124,255,0.08),rgba(79,124,255,0.04)); border-bottom: 1px solid rgba(79,124,255,0.15); color: #1e40af; }
+
+/* ── Skeleton loading cards ───────────────────────────────────── */
+.dm-skeleton { background: var(--card) !important; pointer-events: none; }
+.dm-skeleton-bar { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: dm-shimmer 1.5s infinite; border-radius: 4px; }
+.dm-skeleton-circle { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: dm-shimmer 1.5s infinite; flex-shrink: 0; }
+@keyframes dm-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ── Score loading state ──────────────────────────────────────── */
+.dm-score-loading { display: flex; align-items: center; justify-content: center; height: 28px; }

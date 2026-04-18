@@ -91,7 +91,7 @@ export default function MenteeDashboard() {
   const location = useLocation()
   const [sessions, setSessions] = useState([])
   const [insights, setInsights] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeView, setActiveView] = useState('sessions')
   const [mainTab, setMainTab] = useState('sessions')
@@ -113,7 +113,6 @@ export default function MenteeDashboard() {
   useEffect(() => { if (profile) fetchData() }, [profile])
 
   async function fetchData() {
-    setLoading(true)
     try {
       const { data: sessionData } = await supabase.from('sessions').select('*')
         .eq('mentee_name', profile.full_name).order('started_at', { ascending: false })
@@ -123,7 +122,7 @@ export default function MenteeDashboard() {
           .in('session_id', sessionData.map(s => s.meeting_id)).order('snapshot_time', { ascending: false })
         setInsights(insightData || [])
       }
-    } finally { setLoading(false) }
+    } catch(e) { console.error(e) }
   }
 
   function handleJoin() {

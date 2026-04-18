@@ -775,8 +775,50 @@ app.post('/api/admin/create-mentor', async (req, res) => {
   }
 })
 
+// ─── MENTOR EMBEDDING CACHE (loaded once on startup) ────────────────────────
+let mentorEmbeddingCache = null
+
+async function loadMentorEmbeddings() {
+  console.log('Loading mentor embeddings into memory...')
+  const start = Date.now()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio, job_title, current_company, bio_embedding')
+    .eq('role', 'mentor')
+    .not('bio_embedding', 'is', null)
+  if (error) { console.error('Failed to load embeddings:', error.message); return }
+  // Parse bio_embedding from string to float array
+  mentorEmbeddingCache = data.map(m => ({
+    ...m,
+    bio_embedding: typeof m.bio_embedding === 'string' ? JSON.parse(m.bio_embedding) : m.bio_embedding
+  }))
+  console.log(`Loaded ${data.length} mentor embeddings in ${Date.now()-start}ms`)
+}
+
+// Load on startup
+loadMentorEmbeddings()
+
 // ─── EMBEDDING CACHE ─────────────────────────────────────────────────────────
 const embeddingCache = new Map()
+
+function cosineSimilarity(a, b) {
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+function findSimilarMentors(queryEmbedding, tieringFilter, topK = 30) {
+  if (!mentorEmbeddingCache) return []
+  return mentorEmbeddingCache
+    .filter(m => tieringFilter.includes(m.tiering) && m.bio && m.bio.length > 50)
+    .map(m => ({ ...m, similarity: cosineSimilarity(queryEmbedding, m.bio_embedding) }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, topK)
+}
 
 async function getQueryEmbedding(text) {
   const key = text.trim().toLowerCase().slice(0, 200)
@@ -794,10 +836,68 @@ async function getQueryEmbedding(text) {
   return embedding
 }
 
+// ─── FAST MATCH (embedding pre-filter + Claude scoring, 3 Tier1 + 3 Tier2) ────
+app.post('/api/match-mentors-fast', async (req, res) => {
+  try {
+    const { tiering, product, theme, problemStatement, companyName, state, revenueLakhs, matchCount = 6 } = req.body
+    if (!mentorEmbeddingCache) return res.status(503).json({ error: 'Embeddings not loaded yet' })
+
+    let tieringFilter
+    if (tiering === 'Liftoff') tieringFilter = ['Liftoff', 'Ignite, Liftoff']
+    else tieringFilter = ['Accelerate', 'Liftoff', 'Ignite, Liftoff']
+
+    const queryText = `${product || ''} ${theme || ''} ${problemStatement || ''} ${companyName || ''} ${state || ''}`.trim()
+    const queryEmbedding = await getQueryEmbedding(queryText)
+    const candidates = findSimilarMentors(queryEmbedding, tieringFilter, 20)
+
+    // Build profiles for Claude
+    const mentorProfiles = candidates.map((m, i) => {
+      const bio = (m.bio || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 350)
+      return `EXPERT ${i+1}: ${m.full_name} | ${m.job_title || ''} at ${m.current_company || ''} | ${m.primary_expertise || ''} | ${m.primary_industry || ''} | ${m.years_experience || '?'}yrs\n${bio}`
+    }).join('\n---\n')
+
+    const systemPrompt = `You are an expert matcher. Tier 1 = expert PERSONALLY worked in the SAME industry AND personally solved the SAME problem. Tier 2 = partial fit. Be strict about Tier 1.`
+
+    const prompt = `Founder needs: ${problemStatement || product}
+Company: ${companyName || ''} | Product: ${product} | Location: ${state || ''}
+
+EXPERTS TO EVALUATE:
+${mentorProfiles}
+
+Return exactly 3 Tier 1 and 3 Tier 2 (if fewer Tier 1 exist, fill with Tier 2).
+Return ONLY a JSON array of 6:
+[{"index":1,"tier":1,"score":9,"match_reason":"2 sentences"},{"index":2,"tier":2,"score":6,"match_reason":"..."}]`
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: systemPrompt, messages: [{ role: 'user', content: prompt }] })
+    })
+    const data = await response.json()
+    const text = data.content?.[0]?.text || ''
+    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    let rankings
+    try { rankings = JSON.parse(clean) } catch(e) {
+      const match = clean.match(/\[[\s\S]*\]/)
+      rankings = match ? JSON.parse(match[0]) : []
+    }
+
+    const matches = rankings.map((r, rank) => {
+      const mentor = candidates[r.index - 1]
+      if (!mentor) return null
+      return { ...mentor, bio_embedding: undefined, rank: rank+1, tier: r.tier, score: r.score, match_reason: r.match_reason, match_label: r.tier===1?'Top Match':'Good Match' }
+    }).filter(Boolean)
+
+    res.json({ matches, source: 'hybrid' })
+  } catch(err) {
+    console.error('Fast match error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
 // ─── MATCH MENTORS FOR A MENTEE (Bio-based scoring, Tier 1/2 rubric) ──────────
 app.post('/api/match-mentors', async (req, res) => {
   try {
-    const { tiering, product, theme, problemStatement, companyName, state, revenueLakhs, matchCount = 5, context = '' } = req.body
+    const { tiering, product, theme, problemStatement, companyName, state, revenueLakhs, matchCount = 10, context = '' } = req.body
 
     if (!product && !problemStatement) return res.status(400).json({ error: 'product or problemStatement required' })
 
@@ -825,22 +925,9 @@ app.post('/api/match-mentors', async (req, res) => {
       const queryEmbedding = await getQueryEmbedding(queryText)
 
       // Use pgvector cosine similarity to find top 30 mentors
-      const { data: semResults, error: semErr } = await supabase.rpc('match_mentors_by_embedding', {
-        query_embedding: queryEmbedding,
-        tiering_filter: tieringFilter,
-        match_count: 30
-      })
-      if (semErr) throw new Error(semErr.message)
-      if (!semResults || semResults.length === 0) throw new Error('No semantic results')
-
-      // Get full profiles for semantic matches
-      const ids = semResults.map(r => r.id)
-      const { data: fullProfiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, primary_expertise, secondary_expertise, primary_industry, secondary_industry, tiering, location, years_experience, is_angel_investor, is_serial_entrepreneur, is_founder, linkedin_url, bio, job_title, current_company')
-        .in('id', ids)
-      candidates = fullProfiles || []
-      console.log('Semantic search: found', candidates.length, 'candidates')
+      // In-memory cosine similarity search - instant, no DB call needed
+      candidates = findSimilarMentors(queryEmbedding, tieringFilter, 30)
+      console.log('In-memory search: found', candidates.length, 'candidates')
     } catch(embErr) {
       console.log('Embedding search failed, falling back to keyword:', embErr.message)
       const founderContext = queryText.toLowerCase()
@@ -936,29 +1023,60 @@ Return ONLY a JSON array of the top ${matchCount} experts across both tiers (Tie
   }
 ]`
 
-    const messages = [
-      { role: 'user', content: userPrompt }
-    ]
+    // Split into batches of 5 and score in parallel
+    const BATCH_SIZE = 10
+    const batches = []
+    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+      batches.push(candidates.slice(i, i + BATCH_SIZE))
+    }
 
-    // Call Claude with system prompt
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        system: systemPrompt,
-        messages
+    async function scoreBatch(batch, batchOffset) {
+      const batchProfiles = batch.map((m, i) => {
+        const bio = (m.bio || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 250)
+        return `EXPERT ${i+1}: ${m.full_name}
+Designation: ${m.job_title || ''} at ${m.current_company || ''}
+Expertise: ${m.primary_expertise || ''}${m.secondary_expertise ? ', ' + m.secondary_expertise : ''}
+Industry: ${m.primary_industry || ''}${m.secondary_industry ? ', ' + m.secondary_industry : ''}
+Experience: ${m.years_experience || '?'} years
+Bio: ${bio}`
+      }).join('\n\n---\n\n')
+
+      const batchUserPrompt = userPrompt.replace(mentorProfiles, batchProfiles)
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2000, system: systemPrompt, messages: [{ role: 'user', content: batchUserPrompt }] })
       })
-    })
-    const data = await response.json()
-    const text = data.content?.[0]?.text || ''
-    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
-    const rankings = JSON.parse(clean)
+      const data = await response.json()
+      const text = data.content?.[0]?.text || ''
+      const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+      let results
+      try {
+        results = JSON.parse(clean)
+      } catch(e) {
+        // Try to extract partial JSON array
+        const match = clean.match(/\[[\s\S]*\]/)
+        if (match) results = JSON.parse(match[0])
+        else { console.error('Batch parse error:', clean.slice(0,200)); return [] }
+      }
+      if (!Array.isArray(results)) return []
+      return results.map(r => ({ ...r, index: r.index + batchOffset }))
+    }
+
+    console.log('Scoring', candidates.length, 'candidates in', batches.length, 'parallel batches')
+    const batchResults = await Promise.all(
+      batches.map((batch, bi) => scoreBatch(batch, bi * BATCH_SIZE).then(r => {
+        console.log('Batch', bi, 'returned', r.length, 'results')
+        return r
+      }).catch(e => {
+        console.error('Batch', bi, 'failed:', e.message)
+        return []
+      }))
+    )
+    console.log('Total results before dedup:', batchResults.flat().length)
+    const rankings = batchResults.flat()
+      .sort((a, b) => a.tier !== b.tier ? a.tier - b.tier : b.score - a.score)
+      .slice(0, matchCount)
 
     const matches = rankings.map((r, rank) => {
       const mentor = candidates[r.index - 1]
@@ -984,6 +1102,67 @@ Return ONLY a JSON array of the top ${matchCount} experts across both tiers (Tie
     res.json({ matches, total_candidates: mentors.length })
   } catch (err) {
     console.error('Match mentors error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── SCORE SINGLE MENTOR (on-demand when card is clicked) ────────────────────
+app.post('/api/score-mentor', async (req, res) => {
+  try {
+    const { mentorEmail, product, problemStatement, companyName, state, revenueLakhs, theme, context } = req.body
+    const mentor = mentorEmbeddingCache?.find(m => m.email === mentorEmail)
+    if (!mentor) return res.status(404).json({ error: 'Mentor not found' })
+
+    const bio = (mentor.bio || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
+
+    const founderContext = context || problemStatement || product || ''
+    const prompt = `You are scoring a single expert for a founder match.
+
+Founder: ${companyName || ''} | Product: ${product} | Problem: ${founderContext} | Location: ${state || ''} | Revenue: ${revenueLakhs ? '₹'+revenueLakhs+'L' : 'N/A'}
+
+Expert: ${mentor.full_name}
+Title: ${mentor.job_title || ''} at ${mentor.current_company || ''}
+Expertise: ${mentor.primary_expertise || ''} ${mentor.secondary_expertise || ''}
+Industry: ${mentor.primary_industry || ''} ${mentor.secondary_industry || ''}
+Bio: ${bio}
+
+Score this expert on:
+- Industry Match (0-3): Did they work IN the same industry as operator/founder/leader?
+- Operator Experience (0-3): Did they PERSONALLY solve the same problem the founder faces?
+- Expertise (0-2): Relevant expertise match
+- Key Credentials (0-2): Strong credentials for this context
+
+Tier 1 = BOTH industry match AND operator experience present
+Tier 2 = only one present
+
+Return ONLY JSON:
+{
+  "tier": 1,
+  "score": 9,
+  "industry_match_score": 3,
+  "industry_match_reason": "1 line",
+  "operator_score": 3,
+  "operator_reason": "1 line",
+  "expertise_score": 2,
+  "expertise_reason": "1 line",
+  "credentials_score": 1,
+  "credentials_reason": "1 line",
+  "hands_on": "Yes",
+  "match_reason": "2-3 sentences why this expert fits"
+}`
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
+    })
+    const data = await response.json()
+    const text = data.content?.[0]?.text || ''
+    const clean = text.trim().replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/\n?```$/,'').trim()
+    const score = JSON.parse(clean)
+    res.json({ score })
+  } catch(err) {
+    console.error('Score mentor error:', err)
     res.status(500).json({ error: err.message })
   }
 })
