@@ -243,8 +243,14 @@ export default function DiscoverMentors({ embedded = false, matchCache = null, o
         })
       })
       const data = await res.json()
-      setAiResults(data.matches || [])
+      const results = data.matches || []
+      setAiResults(results)
       setAiTab('tier1')
+      // Cache query results
+      try {
+        sessionStorage.setItem('lastAiQuery', aiQuery)
+        sessionStorage.setItem('lastAiResults', JSON.stringify(results))
+      } catch(e) {}
       // Scroll to results
       setTimeout(() => {
         document.querySelector('.dm-mentor-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })

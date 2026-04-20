@@ -800,6 +800,7 @@ loadMentorEmbeddings()
 
 // ─── EMBEDDING CACHE ─────────────────────────────────────────────────────────
 const embeddingCache = new Map()
+const queryResultsCache = new Map() // cache full Claude results by query key
 
 function cosineSimilarity(a, b) {
   let dot = 0, normA = 0, normB = 0
@@ -850,6 +851,15 @@ app.post('/api/match-mentors-fast', async (req, res) => {
     const queryEmbedding = await getQueryEmbedding(queryText)
     const candidates = findSimilarMentors(queryEmbedding, tieringFilter, 20)
 
+    // Check query results cache first
+    const cacheKey = `${tieringFilter.join(',')}_${queryText.slice(0,100)}`
+    console.log('Cache key:', JSON.stringify(cacheKey))
+    console.log('Cache size:', queryResultsCache.size)
+    if (queryResultsCache.has(cacheKey)) {
+      console.log('Fast: serving from query cache')
+      return res.json(queryResultsCache.get(cacheKey))
+    }
+
     // Build profiles for Claude
     const mentorProfiles = candidates.map((m, i) => {
       const bio = (m.bio || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 350)
@@ -888,7 +898,11 @@ Return ONLY a JSON array of 6:
       return { ...mentor, bio_embedding: undefined, rank: rank+1, tier: r.tier, score: r.score, match_reason: r.match_reason, match_label: r.tier===1?'Top Match':'Good Match' }
     }).filter(Boolean)
 
-    res.json({ matches, source: 'hybrid' })
+    const result = { matches, source: 'hybrid' }
+    // Cache result (max 50 queries)
+    queryResultsCache.set(cacheKey, result)
+    if (queryResultsCache.size > 50) queryResultsCache.delete(queryResultsCache.keys().next().value)
+    res.json(result)
   } catch(err) {
     console.error('Fast match error:', err)
     res.status(500).json({ error: err.message })

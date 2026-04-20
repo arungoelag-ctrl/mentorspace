@@ -255,6 +255,7 @@ export default function MentorDashboard() {
       localStorage.removeItem('activeMeeting')
       try {
         const m = JSON.parse(activeMeeting)
+        if (!m.wasActive) { console.log('Meeting was never active, skipping auto-end'); return }
         const transcript = JSON.parse(sessionStorage.getItem('lastTranscript') || '[]')
         fetch(`/api/sessions/${m.meetingNumber}/end`, {
           method: 'POST',
