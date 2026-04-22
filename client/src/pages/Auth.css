@@ -161,3 +161,10 @@
 }
 .mentor-av { background: linear-gradient(135deg, #6c74f7, #9c73f8); }
 .mentee-av { background: linear-gradient(135deg, #3dd68c, #2bc477); }
+
+/* ── Mobile Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .auth-wrap { padding: 16px; }
+  .auth-card { padding: 24px 20px; max-width: 100%; }
+  .auth-title { font-size: 22px; }
+}

@@ -230,3 +230,9 @@
 .rnm-avail-calendar .avail-cell.saved { background: rgba(37,99,235,0.35) !important; border-left: 3px solid #2563eb; }
 .rnm-avail-calendar .avail-cell.past { background: #fafafa; cursor: default; }
 .rnm-avail-calendar .avail-day-header.today .avail-day-date { background: #2563eb; color: #fff; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
+
+/* ── RN Manager AI search ─────────────────────────────────────── */
+.rnm-ai-badge { padding: 5px 10px; font-size: 11px; font-weight: 600; border-radius: 6px 6px 0 0; margin: -12px -12px 10px -12px; display: flex; align-items: center; gap: 4px; }
+.rnm-ai-badge.tier1 { background: rgba(5,150,105,0.08); color: #065f46; border-bottom: 1px solid rgba(5,150,105,0.15); }
+.rnm-ai-badge.tier2 { background: rgba(79,124,255,0.06); color: #1e40af; border-bottom: 1px solid rgba(79,124,255,0.12); }
+.rnm-mc-reason { font-size: 11px; color: #475569; line-height: 1.5; margin: 4px 0; padding: 6px 8px; background: rgba(79,124,255,0.04); border-radius: 6px; border-left: 2px solid #2563eb; }

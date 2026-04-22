@@ -251,8 +251,10 @@ export default function Session() {
   const transcriptEndRef = useRef(null)
   const zoomRef = useRef(null)
   const [meetingActive, setMeetingActive] = useState(false)
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
   const transcriptRef = useRef([])
   const transcriptActiveRef = useRef(false)
+  const [broadcastActive, setBroadcastActive] = useState(false)
   const [transcriptActive, setTranscriptActive] = useState(false)
 
   const role = profile?.role || 'mentor'
@@ -315,13 +317,13 @@ export default function Session() {
     }
   }, [meetingNumber, profile, user])
 
-  // Auto-join once userName is set
+  // Auto-join once userName is set (desktop only)
   useEffect(() => {
-    if (phase === 'setup' && userName) {
+    if (phase === 'setup' && userName && !isMobile) {
       const timer = setTimeout(() => join(), 300)
       return () => clearTimeout(timer)
     }
-  }, [phase, userName])
+  }, [phase, userName, isMobile])
 
   useEffect(() => {
     transcriptRef.current = transcript
@@ -442,6 +444,108 @@ export default function Session() {
     }).catch(() => {})
 
     try {
+      const numericRole = role === 'mentor' ? 1 : 0
+      const { signature, sdkKey } = await getSignature({ meetingNumber, role: numericRole })
+
+      if (isMobile) {
+        // Component View for mobile
+        console.log('Mobile detected, using Component View')
+        const embeddedModule = await import('@zoom/meetingsdk/embedded')
+        const ZoomMtgEmbedded = embeddedModule.default || embeddedModule
+        const client = ZoomMtgEmbedded.createClient()
+        zoomRef.current = { endMeeting: () => { try { client.endMeeting() } catch(e) {} }, leaveMeeting: () => { try { client.leaveMeeting() } catch(e) {} } }
+        // Set phase to live so #meetingSDKElement renders in DOM
+        setPhase('loading')
+        await new Promise(resolve => setTimeout(resolve, 300))
+        setPhase('live')
+        await new Promise(resolve => setTimeout(resolve, 600))
+        const meetingSDKElement = document.getElementById('meetingSDKElement')
+        if (!meetingSDKElement) throw new Error('Meeting container not found - DOM not ready')
+        try {
+          const w = meetingSDKElement.clientWidth || window.innerWidth || 360
+          const h = Math.round(w * 0.65)
+          client.init({
+            zoomAppRoot: meetingSDKElement,
+            language: 'en-US',
+            customize: {
+              video: {
+                isResizable: false,
+                defaultViewType: 'active',
+                viewSizes: {
+                  default: { width: w, height: h },
+                  ribbon: { width: w, height: h }
+                }
+              }
+            }
+          })
+        } catch(initErr) {
+          console.error('Component view init error:', initErr)
+          throw new Error('Zoom init failed on this device: ' + initErr.message)
+        }
+
+        client.on('connection-change', async (payload) => {
+          console.log('Mobile connection-change:', payload.state)
+          if (payload.state === 'Connected') {
+            setMeetingActive(true)
+            try { const am = JSON.parse(localStorage.getItem('activeMeeting')||'{}'); localStorage.setItem('activeMeeting', JSON.stringify({...am, wasActive:true})) } catch(e) {}
+            // Default to speaker view and ensure controls visible
+            setTimeout(() => {
+              try { client.setViewType('active') } catch(e) { console.log('setViewType:', e.message) }
+            }, 1000)
+          }
+          if (payload.state === 'Closed' || payload.state === 'Fail') {
+            console.log('Mobile meeting closed:', payload.state)
+          }
+        })
+
+
+
+        // Subscribe to transcript broadcast from desktop
+        const txChannel = supabase.channel('tx_' + meetingNumber)
+        txChannel.on('broadcast', { event: 'tx' }, ({ payload }) => {
+          if (!payload) return
+          setBroadcastActive(true)
+          // Respect mentee's disable choice
+          if (!transcriptActiveRef.current) return
+          setTranscript(prev => {
+            const last = prev[prev.length - 1]
+            if (last && last.name === payload.n && !last.done) {
+              return [...prev.slice(0, -1), { ...last, text: payload.t, done: payload.d }]
+            }
+            return [...prev, { id: Date.now()+Math.random(), name: payload.n, speaker: payload.s||'other', text: payload.t, time: payload.tm, done: payload.d }]
+          })
+        }).subscribe((status) => console.log('TX channel:', status))
+        zoomRef.current._txChannel = txChannel
+
+        client.on('caption-message', (payload) => {
+          console.log('Caption received:', payload?.displayName, payload?.text?.slice(0,50))
+          // caption-message event (fallback, may not fire on all Android devices)
+          const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          const isMe = payload.displayName === uName.trim()
+          setTranscript(prev => {
+            const last = prev[prev.length - 1]
+            if (last && last.name === payload.displayName && !last.done) {
+              return [...prev.slice(0, -1), { ...last, text: payload.text, done: !!payload.done }]
+            }
+            return [...prev, { id: Date.now() + Math.random(), name: payload.displayName, speaker: isMe ? 'me' : 'other', text: payload.text, time: now, done: !!payload.done }]
+          })
+        })
+
+                console.log('Joining with component view...')
+        try {
+          await client.join({ signature, sdkKey, meetingNumber, userName: uName.trim(), userEmail: userEmail.trim(), password })
+          console.log('Join called successfully')
+        } catch(joinErr) {
+          if (joinErr?.errorCode === 5012 || joinErr?.message?.includes('5012')) {
+            console.log('Already in meeting, treating as connected')
+            setMeetingActive(true)
+          } else {
+            throw joinErr
+          }
+        }
+        return
+      }
+
       const { ZoomMtg } = await import('@zoom/meetingsdk')
       zoomRef.current = ZoomMtg
       ZoomMtg.preLoadWasm(); ZoomMtg.prepareWebSDK()
@@ -459,11 +563,17 @@ export default function Session() {
             }
             return [...prev, { id: Date.now() + Math.random(), name: data.displayName, speaker: isMe ? 'me' : 'other', text: data.text, time: now, done: !!data.done }]
           })
+          // Broadcast to mobile via Supabase Realtime (free, no DB write)
+          try {
+            supabase.channel('tx_' + meetingNumber).send({
+              type: 'broadcast', event: 'tx',
+              payload: { n: data.displayName, t: data.text, d: !!data.done, tm: now, s: isMe ? 'me' : 'other' }
+            })
+          } catch(e) {}
         })
       } catch (e) { console.log('Transcript listener error:', e.message) }
 
-      const numericRole = role === 'mentor' ? 1 : 0
-      const { signature, sdkKey } = await getSignature({ meetingNumber, role: numericRole })
+
 
       ZoomMtg.init({
         leaveUrl: window.location.origin + '/?ended=1',
@@ -472,7 +582,7 @@ export default function Session() {
           ZoomMtg.join({
             signature, sdkKey, meetingNumber,
             userName: uName.trim(), userEmail: userEmail.trim(), passWord: password,
-            success: () => { setPhase('live'); setMeetingActive(true); try { const am = JSON.parse(localStorage.getItem('activeMeeting')||'{}'); localStorage.setItem('activeMeeting', JSON.stringify({...am, wasActive:true})) } catch(e) {} },
+            success: () => { setPhase('live'); setMeetingActive(true); supabase.channel('tx_' + meetingNumber).subscribe(); try { const am = JSON.parse(localStorage.getItem('activeMeeting')||'{}'); localStorage.setItem('activeMeeting', JSON.stringify({...am, wasActive:true})) } catch(e) {} },
             error: (e) => { setErrMsg('Join failed: ' + (e.reason || JSON.stringify(e))); setPhase('setup') }
           })
         },
@@ -480,7 +590,7 @@ export default function Session() {
       })
 
       setTimeout(() => setPhase(p => p === 'loading' ? 'live' : p), 10000)
-    } catch (err) { setErrMsg('Error: ' + err.message); setPhase('setup') }
+    } catch (err) { console.error('Join error:', err); setErrMsg('Error: ' + (err?.message || JSON.stringify(err) || 'Unknown error')); setPhase('setup') }
   }, [meetingNumber, role, userName, userEmail, password, topic, mentorName, menteeName])
 
   async function findExperts(customQuery = '') {
@@ -548,7 +658,8 @@ export default function Session() {
       })
     } catch(e) {}
 
-    if (meetingActive) await handleEndMeeting()
+    // Only mark completed when mentor ends the meeting, not when mentee leaves
+    if (meetingActive && role === 'mentor') await handleEndMeeting()
     setPhase('ended')
   }
 
@@ -653,7 +764,9 @@ export default function Session() {
       </div>
 
       <div className="live-workbench">
-        <div className="zoom-col"><div id="meetingSDKElement" className="zoom-embed" /></div>
+        <div className="zoom-col">
+          <div id="meetingSDKElement" className={"zoom-embed"+(isMobile?" zoom-embed-mobile":"")} />
+        </div>
         <div className="side-panel">
           <div className="panel-tabs">
             <button className={'panel-tab ' + (activeTab === 'transcript' ? 'active' : '')} onClick={() => setActiveTab('transcript')}>

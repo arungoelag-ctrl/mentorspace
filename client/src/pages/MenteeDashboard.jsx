@@ -162,8 +162,8 @@ export default function MenteeDashboard() {
         <div className="mentee-top-left">
           <div className="md-logo">M<em>S</em></div>
           <div>
-            <div className="md-greeting">Good {hour()}, {profile?.full_name?.split(' ')[0]} 👋</div>
-            <div className="mentee-role-chip">🙋 Mentee</div>
+            <div className="md-greeting">{profile?.full_name}</div>
+            <div className="mentee-role-chip">{profile?.company_name || 'Mentee'}</div>
           </div>
         </div>
         <div className="md-top-right">
@@ -173,12 +173,26 @@ export default function MenteeDashboard() {
         </div>
       </div>
 
+      {/* Mobile bottom nav - separate from desktop sidebar */}
+      <div className="mobile-bottom-nav">
+        <div className={`mobile-nav-item ${mainTab==='requests'?'active':''}`} onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
+          <span>📬</span>
+          <span>Requests{pendingRequests.length>0?` (${pendingRequests.length})`:''}</span>
+        </div>
+        <div className="mobile-nav-item" onClick={()=>navigate('/discover')}>
+          <span>🔍</span><span>Find Mentor</span>
+        </div>
+        <div className={`mobile-nav-item ${mainTab==='profile'?'active':''}`} onClick={()=>setMainTab('profile')}>
+          <span>👤</span><span>Profile</span>
+        </div>
+      </div>
+
       <div className="mentee-body">
         <div className="mentee-sidebar">
           <div className="md-sidebar-title">My Mentors</div>
-          {uniqueMentors.length === 0 ? <div className="md-empty" style={{fontSize:12,padding:'8px'}}>No mentors yet.</div> :
+          {uniqueMentors.length === 0 ? <div className="md-empty mentor-list-item" style={{fontSize:12,padding:'8px'}}>No mentors yet.</div> :
            uniqueMentors.map(mentor => (
-            <div key={mentor} className="md-mentee-row" onClick={() => setMainTab('sessions')}>
+            <div key={mentor} className="md-mentee-row mentor-list-item" onClick={() => setMainTab('sessions')}>
               <div className="md-mentee-avatar">{mentor.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
               <div>
                 <div className="md-mentee-name">{mentor}</div>
@@ -212,11 +226,7 @@ export default function MenteeDashboard() {
             <div className="md-stat-val">{sessions.length}</div>
             <div className="md-stat-label">All Sessions</div>
           </div>
-          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='active'?'active':''}`}
-            onClick={()=>{ setMainTab('sessions'); setStatusFilter('active') }}>
-            <div className="md-stat-val">{sessions.filter(s=>s.status==='active').length}</div>
-            <div className="md-stat-label">In Progress</div>
-          </div>
+
           <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='ended'?'active':''}`}
             onClick={()=>{ setMainTab('sessions'); setStatusFilter('ended') }}>
             <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
@@ -235,7 +245,7 @@ export default function MenteeDashboard() {
         </div>
 
         {/* Quick Join */}
-        <div className="mentee-quick-join">
+        <div className="mentee-quick-join md-join-section">
           <div className="mentee-qj-title">🔗 Join a Session</div>
           <div className="mentee-qj-row">
             <input className="mentee-qj-input" placeholder="Enter Meeting ID from your mentor"

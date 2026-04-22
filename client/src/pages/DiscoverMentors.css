@@ -651,3 +651,104 @@
 
 /* ── Score loading state ──────────────────────────────────────── */
 .dm-score-loading { display: flex; align-items: center; justify-content: center; height: 28px; }
+
+/* ── Mobile Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dm-wrap { padding: 0; }
+  .dm-header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+  .dm-header-title { font-size: 18px; }
+  .dm-intel-filters { padding: 12px 16px; gap: 8px; }
+  .dm-filter-row { flex-wrap: wrap; gap: 6px; }
+  .dm-filter-pills { flex-wrap: wrap; gap: 4px; }
+  .dm-filter-pill { padding: 5px 10px; font-size: 11px; }
+  .dm-mentor-grid { grid-template-columns: 1fr; padding: 12px 16px; gap: 12px; }
+  .dm-mentor-card { padding: 14px; }
+  .discover-matches-grid { grid-template-columns: 1fr; padding: 12px 16px; gap: 12px; }
+  .discover-match-card-v2 { padding: 12px; }
+  .dm-ai-search { padding: 12px 16px; }
+  .dm-ai-search-box { padding: 8px 12px; }
+  .dm-ai-search-input { font-size: 13px; }
+  .dm-ai-tabs { flex-wrap: wrap; gap: 4px; }
+  .dm-ai-tab { padding: 6px 12px; font-size: 12px; }
+  .dm-modal-box { max-width: 100% !important; max-height: 95vh !important; margin: 0; border-radius: 16px 16px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; }
+  .dm-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+  .dm-modal-scorecard-grid { grid-template-columns: repeat(2,1fr) !important; }
+  .dm-section-heading { padding: 12px 16px 0; }
+  .dm-ai-results-header { padding: 0 16px; flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .dm-mentor-grid { grid-template-columns: 1fr; }
+  .discover-matches-grid { grid-template-columns: 1fr; }
+  .dm-modal-scorecard-grid { grid-template-columns: repeat(2,1fr) !important; }
+}
+
+/* ── Mobile - Discover Mentors ────────────────────────────────── */
+@media (max-width: 768px) {
+  .dm-page-header { padding: 14px 16px 10px; }
+  .dm-page-title { font-size: 20px; }
+  .dm-page-sub { font-size: 12px; }
+  .dm-back-btn { font-size: 12px; padding: 6px 10px; }
+
+  /* AI search bar - full width prominent on mobile */
+  .dm-ai-search { padding: 12px 16px; position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .dm-ai-search-box { border-radius: 10px; }
+  .dm-ai-search-input { font-size: 14px; }
+  .dm-ai-search-btn { padding: 8px 14px; font-size: 13px; }
+
+  /* Hide filters on mobile by default - rely on AI search */
+  .dm-intel-filters { display: none; }
+
+  /* AI recommended section */
+  .discover-matches-grid { 
+    grid-template-columns: 1fr !important; 
+    padding: 12px 16px; 
+    gap: 10px; 
+  }
+  .discover-match-card-v2 { padding: 14px; }
+  .dmv2-top { gap: 8px; }
+  .dmv2-name { font-size: 14px; }
+
+  /* Tabs */
+  .dm-ai-results-header { padding: 10px 16px; }
+  .dm-ai-tabs { gap: 4px; overflow-x: auto; }
+  .dm-ai-tab { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+  .dm-ai-tab-count { font-size: 10px; }
+
+  /* Mentor grid - single column */
+  .dm-section-heading { padding: 12px 16px 0; }
+  .dm-mentor-grid { 
+    grid-template-columns: 1fr !important; 
+    padding: 12px 16px; 
+    gap: 10px; 
+  }
+  .dm-mentor-card { padding: 14px; }
+  .dm-mentor-name { font-size: 14px; }
+
+  /* Modal - slide up from bottom on mobile */
+  .dm-modal-overlay { 
+    align-items: flex-end !important; 
+    padding: 0 !important; 
+  }
+  .dm-modal-box { 
+    max-width: 100% !important; 
+    width: 100% !important;
+    max-height: 92vh !important; 
+    border-radius: 20px 20px 0 0 !important;
+    position: relative;
+  }
+  /* Pull handle indicator */
+  .dm-modal-box::before {
+    content: '';
+    display: block;
+    width: 40px; height: 4px;
+    background: #e2e8f0;
+    border-radius: 99px;
+    margin: 10px auto -6px;
+  }
+  .dm-modal-scorecard-grid { 
+    grid-template-columns: repeat(2,1fr) !important; 
+    gap: 8px;
+  }
+  .dm-modal-score-val { font-size: 18px !important; }
+}

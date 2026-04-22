@@ -19,6 +19,13 @@ export default function RNManagerDashboard() {
   const [tierFilter, setTierFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchField, setSearchField] = useState('name')
+  const [aiQuery, setAiQuery] = useState('')
+  const [aiResults, setAiResults] = useState(null)
+  const [aiSearching, setAiSearching] = useState(false)
+  const [aiTab, setAiTab] = useState('tier1')
+  const [selectedAiMentor, setSelectedAiMentor] = useState(null)
+  const [aiScoreCache, setAiScoreCache] = useState({})
+  const [scoringAiMentor, setScoringAiMentor] = useState(null)
   const [counts, setCounts] = useState({total:0,liftoff:0,accelerate:0,ignite:0})
   const [selected, setSelected] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -83,6 +90,39 @@ export default function RNManagerDashboard() {
       const {data} = await q.order('full_name').limit(200)
       setMentors(data || [])
     } finally { setMentorsLoading(false) }
+  }
+
+  async function searchByQuery() {
+    if (!aiQuery.trim()) { setAiResults(null); return }
+    // Check client cache first
+    try {
+      const cacheKey = 'rnm_query_' + aiQuery.trim().toLowerCase().slice(0,100)
+      const cached = sessionStorage.getItem(cacheKey)
+      if (cached) { setAiResults(JSON.parse(cached)); setAiTab('tier1'); return }
+    } catch(e) {}
+    setAiSearching(true)
+    try {
+      const res = await fetch('/api/match-mentors-fast', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          tiering: tierFilter === 'all' ? 'Accelerate' : tierFilter,
+          product: aiQuery,
+          problemStatement: aiQuery,
+          matchCount: 6
+        })
+      })
+      const data = await res.json()
+      const results = data.matches || []
+      setAiResults(results)
+      setAiTab('tier1')
+      // Cache results
+      try {
+        const cacheKey = 'rnm_query_' + aiQuery.trim().toLowerCase().slice(0,100)
+        sessionStorage.setItem(cacheKey, JSON.stringify(results))
+      } catch(e) {}
+    } catch(e) { console.error(e) }
+    finally { setAiSearching(false) }
   }
 
   function openEdit(mentor) {
@@ -278,21 +318,43 @@ export default function RNManagerDashboard() {
                 ))}
               </div>
               <div className="rnm-toolbar">
-                <select className="rnm-field-select" value={searchField} onChange={e=>setSearchField(e.target.value)}>
+                <select className="rnm-field-select" value={searchField} onChange={e=>{setSearchField(e.target.value);if(e.target.value!=='query'){setAiResults(null);setAiQuery('')}}}>
                   <option value="name">Name</option>
                   <option value="email">Email</option>
                   <option value="phone">Phone</option>
+                  <option value="query">AI Query</option>
                 </select>
-                <input className="rnm-search-input" placeholder="Search mentors..." value={searchQuery}
-                  onChange={e=>setSearchQuery(e.target.value)}
-                  onKeyDown={e=>e.key==='Enter'&&fetchMentors(tierFilter,searchQuery,searchField)} />
-                <button className="rnm-search-btn" onClick={()=>fetchMentors(tierFilter,searchQuery,searchField)}>Search</button>
-                <span className="rnm-result-count">{mentors.length} mentors</span>
+                {searchField === 'query' ? <>
+                  <input className="rnm-search-input" placeholder="e.g. 'export leather bags to Europe, need GTM strategy'..." value={aiQuery}
+                    onChange={e=>{setAiQuery(e.target.value);if(!e.target.value)setAiResults(null)}}
+                    onKeyDown={e=>e.key==='Enter'&&searchByQuery()} />
+                  <button className="rnm-search-btn" onClick={searchByQuery} disabled={aiSearching}>{aiSearching?'Searching...':'Find Mentors'}</button>
+                  {aiResults && <button className="rnm-search-btn" style={{background:'#64748b'}} onClick={()=>{setAiResults(null);setAiQuery('')}}>✕ Clear</button>}
+                </> : <>
+                  <input className="rnm-search-input" placeholder="Search mentors..." value={searchQuery}
+                    onChange={e=>setSearchQuery(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&fetchMentors(tierFilter,searchQuery,searchField)} />
+                  <button className="rnm-search-btn" onClick={()=>fetchMentors(tierFilter,searchQuery,searchField)}>Search</button>
+                </>}
+                <span className="rnm-result-count">{aiResults ? aiResults.length+' AI matches' : mentors.length+' mentors'}</span>
               </div>
               {mentorsLoading && <div className="rnm-loading">Loading...</div>}
+              {aiResults && (
+                <div className="rnm-tier-pills" style={{marginBottom:8}}>
+                  <button className={'rnm-tier-pill'+(aiTab==='tier1'?' active':'')} onClick={()=>setAiTab('tier1')}>🏆 Strong Matches <span className="rnm-tier-count">{aiResults.filter(r=>r.tier===1).length}</span></button>
+                  <button className={'rnm-tier-pill'+(aiTab==='tier2'?' active':'')} onClick={()=>setAiTab('tier2')}>👍 Good Matches <span className="rnm-tier-count">{aiResults.filter(r=>r.tier===2).length}</span></button>
+                  <button className={'rnm-tier-pill'+(aiTab==='all'?' active':'')} onClick={()=>setAiTab('all')}>All {aiResults.length}</button>
+                </div>
+              )}
               <div className="rnm-mentor-grid">
-                {mentors.map((m,i) => (
-                  <div key={m.id} className="rnm-mentor-card" onClick={()=>openEdit(m)}>
+                {(aiResults ? aiResults.filter(r => aiTab==='all'||(aiTab==='tier1'&&r.tier===1)||(aiTab==='tier2'&&r.tier===2)) : mentors).map((m,i) => (
+                  <div key={m.id} className="rnm-mentor-card" onClick={()=>{ if(aiResults) { setSelectedAiMentor(m); if(!aiScoreCache[m.email]){ setScoringAiMentor(m.email); fetch('/api/score-mentor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mentorEmail:m.email,product:aiQuery,problemStatement:aiQuery,companyName:'',state:'',revenueLakhs:'',theme:''})}).then(r=>r.json()).then(d=>{ if(d.score) setAiScoreCache(prev=>({...prev,[m.email]:d.score})) }).catch(console.error).finally(()=>setScoringAiMentor(null)) } } else openEdit(m) }}>
+                    {aiResults && m.tier && (
+                      <div className={"rnm-ai-badge "+(m.tier===1?'tier1':'tier2')}>
+                        {m.tier===1?'🏆 Strong Match':'👍 Good Match'} · ⭐{m.score}/10
+                        {m.hands_on && <span style={{marginLeft:6,fontSize:10}}>{m.hands_on==='Yes'?'🟢':m.hands_on==='Partial'?'🟡':'🔴'} {m.hands_on}</span>}
+                      </div>
+                    )}
                     <div className="rnm-mc-top">
                       {m.primary_industry && <span className="rnm-mc-tag">{m.primary_industry}</span>}
                       {m.tiering && <span className={'rnm-mc-tier '+(m.tiering.split(',')[0].trim())}>{m.tiering}</span>}
@@ -307,6 +369,7 @@ export default function RNManagerDashboard() {
                         {m.location && <div className="rnm-mc-loc">📍 {m.location}</div>}
                       </div>
                     </div>
+                    {aiResults && m.match_reason && <div className="rnm-mc-reason">{m.match_reason}</div>}
                     {m.years_experience && <div className="rnm-mc-exp">{m.years_experience} yrs exp</div>}
                   </div>
                 ))}
@@ -570,6 +633,75 @@ export default function RNManagerDashboard() {
 
         </div>
       </div>
+
+      {selectedAiMentor && (
+        <div onClick={()=>setSelectedAiMentor(null)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:16,width:'100%',maxWidth:680,maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 24px 60px rgba(0,0,0,0.2)'}}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:12,background:'#f8fafc'}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:16,fontWeight:700,color:'#1e293b'}}>{selectedAiMentor.full_name}</div>
+                <div style={{fontSize:11,color:'#64748b',fontFamily:'monospace'}}>{selectedAiMentor.job_title} · {selectedAiMentor.current_company} · {selectedAiMentor.email}</div>
+              </div>
+              <button onClick={()=>{setSelectedAiMentor(null);setTimeout(()=>openEdit(selectedAiMentor),100)}} style={{padding:'6px 14px',background:'#2563eb',border:'none',borderRadius:7,color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer'}}>✏️ Edit Mentor</button>
+              <button onClick={()=>setSelectedAiMentor(null)} style={{width:28,height:28,borderRadius:7,border:'1px solid #e2e8f0',background:'#fff',cursor:'pointer',fontSize:13}}>✕</button>
+            </div>
+            <div style={{overflowY:'auto',padding:18,display:'flex',flexDirection:'column',gap:14}}>
+              {/* Scorecard */}
+              {(() => {
+                const sc = aiScoreCache[selectedAiMentor.email]
+                const tier = sc?.tier || selectedAiMentor.tier || 2
+                const totalScore = sc ? (sc.industry_match_score||0)+(sc.operator_score||0)+(sc.expertise_score||0)+(sc.credentials_score||0) : selectedAiMentor.score
+                const handsOn = sc?.hands_on || selectedAiMentor.hands_on
+                return (
+                  <div style={{background:'linear-gradient(135deg,rgba(79,124,255,0.06),rgba(79,124,255,0.02))',border:'1px solid rgba(79,124,255,0.2)',borderRadius:12,padding:'12px 16px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,flexWrap:'wrap'}}>
+                      <span style={{fontSize:12,fontWeight:700,padding:'3px 10px',borderRadius:99,background:tier===1?'rgba(5,150,105,0.12)':'rgba(79,124,255,0.1)',color:tier===1?'#065f46':'#1e40af'}}>{tier===1?'🏆 Strong Match':'👍 Good Match'}</span>
+                      <span style={{fontSize:13,fontWeight:700,fontFamily:'monospace',marginLeft:'auto'}}>⭐ {totalScore}/10</span>
+                      {handsOn && <span style={{fontSize:11,fontWeight:600,color:handsOn==='Yes'?'#059669':handsOn==='Partial'?'#d97706':'#dc2626'}}>{handsOn==='Yes'?'🟢 Hands-on':handsOn==='Partial'?'🟡 Partial':'🔴 Advisory'}</span>}
+                    </div>
+                    {scoringAiMentor===selectedAiMentor.email && !sc ? (
+                      <div style={{fontSize:12,color:'#94a3b8',display:'flex',alignItems:'center',gap:8}}><div className="mreq-spinner" style={{width:14,height:14}}/>Analyzing match quality…</div>
+                    ) : sc ? (
+                      <>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:12}}>
+                          {[{val:sc.industry_match_score,max:3,label:'Industry Match',reason:sc.industry_match_reason},{val:sc.operator_score,max:3,label:'Operator Exp',reason:sc.operator_reason},{val:sc.expertise_score,max:2,label:'Expertise',reason:sc.expertise_reason},{val:sc.credentials_score,max:2,label:'Credentials',reason:sc.credentials_reason}].map(item=>(
+                            <div key={item.label} style={{textAlign:'center',padding:'8px 6px',background:'#fff',borderRadius:8,border:'1px solid #e2e8f0'}}>
+                              <div style={{fontSize:18,fontWeight:700,color:'#2563eb',fontFamily:'monospace'}}>{item.val}/{item.max}</div>
+                              <div style={{fontSize:9,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.06em',fontWeight:600,marginTop:2}}>{item.label}</div>
+                              {item.reason && <div style={{fontSize:10,color:'#475569',marginTop:4,lineHeight:1.4,textAlign:'left'}}>{item.reason}</div>}
+                            </div>
+                          ))}
+                        </div>
+                        {sc.match_reason && <div style={{fontSize:12,color:'#1e293b',lineHeight:1.6,padding:'8px 10px',background:'rgba(5,150,105,0.06)',borderRadius:8,borderLeft:'3px solid #059669'}}>✅ {sc.match_reason}</div>}
+                      </>
+                    ) : (
+                      selectedAiMentor.match_reason && <div style={{fontSize:12,color:'#1e293b',lineHeight:1.6,padding:'8px 10px',background:'rgba(5,150,105,0.06)',borderRadius:8,borderLeft:'3px solid #059669'}}>✅ {selectedAiMentor.match_reason}</div>
+                    )}
+                  </div>
+                )
+              })()}
+              {/* Bio */}
+              {selectedAiMentor.bio && (
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>About</div>
+                  <div style={{fontSize:13,color:'#374151',lineHeight:1.7}}>{selectedAiMentor.bio.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}</div>
+                </div>
+              )}
+              {/* Expertise */}
+              <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                {selectedAiMentor.primary_expertise && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#eff6ff',color:'#1d4ed8'}}>{selectedAiMentor.primary_expertise}</span>}
+                {selectedAiMentor.secondary_expertise && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#eff6ff',color:'#1d4ed8'}}>{selectedAiMentor.secondary_expertise}</span>}
+                {selectedAiMentor.primary_industry && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#f0fdf4',color:'#15803d'}}>{selectedAiMentor.primary_industry}</span>}
+                {selectedAiMentor.years_experience && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#f1f5f9',color:'#475569'}}>{selectedAiMentor.years_experience}yr exp</span>}
+                {selectedAiMentor.location && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#f1f5f9',color:'#475569'}}>📍 {selectedAiMentor.location}</span>}
+                {selectedAiMentor.is_founder && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#fff7ed',color:'#c2410c',fontWeight:600}}>Founder</span>}
+                {selectedAiMentor.is_angel_investor && <span style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#fdf4ff',color:'#7e22ce',fontWeight:600}}>Angel Investor</span>}
+                {selectedAiMentor.linkedin_url && <a href={selectedAiMentor.linkedin_url} target="_blank" rel="noreferrer" style={{fontSize:12,padding:'4px 10px',borderRadius:99,background:'#0077b5',color:'#fff',fontWeight:700,textDecoration:'none'}}>LinkedIn</a>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && selected && (
         <div onClick={()=>{setShowModal(false);setConfirmSave(false);setConfirmDelete(false)}} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>

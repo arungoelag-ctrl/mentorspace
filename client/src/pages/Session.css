@@ -745,3 +745,149 @@
 .brief-focus-tag { background: rgba(79,124,255,0.08); border: 1px solid rgba(79,124,255,0.18); color: var(--accent); font-size: 11px; font-family: var(--font-mono); font-weight: 600; padding: 3px 10px; border-radius: 99px; }
 .brief-question { display: flex; gap: 8px; font-size: 13px; color: var(--text); padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
 .brief-question:last-child { border-bottom: none; }
+
+/* ── Mobile Responsive Session ────────────────────────────────── */
+@media (max-width: 768px) {
+  .session-setup { padding: 16px; }
+  .setup-card { padding: 20px 16px; }
+  .role-picker { grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .session-live-wrap { height: 100vh; height: 100dvh; }
+
+  .live-topbar { padding: 8px 12px; }
+  .live-meta { font-size: 11px; gap: 6px; }
+  .live-meta strong { font-size: 12px; }
+  .role-chip { font-size: 10px; padding: 2px 8px; }
+
+  /* Stack zoom + panel vertically on mobile */
+  .live-workbench {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr auto;
+  }
+
+  /* Zoom takes top portion */
+  .zoom-col {
+    height: 45vh;
+    position: relative;
+  }
+
+  /* Side panel becomes bottom sheet */
+  .side-panel {
+    height: 55vh;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .panel-tabs { overflow-x: auto; white-space: nowrap; }
+  .panel-tab { padding: 10px 14px; font-size: 12px; flex-shrink: 0; }
+
+  .live-topbar .btn { padding: 6px 10px; font-size: 12px; }
+  .btn-danger { padding: 6px 10px !important; font-size: 12px !important; }
+
+  /* Brief panel */
+  .brief-panel { padding: 12px; }
+  .brief-panel-text { font-size: 12px; }
+
+  /* Actions panel */
+  .actions-panel { padding: 12px; }
+  .actions-panel-item { font-size: 12px; padding: 8px 10px; }
+
+  /* AI insights */
+  .ai-panel { padding: 12px; }
+
+  /* Expert modal full screen on mobile */
+  .dm-modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+}
+
+@media (max-width: 480px) {
+  .zoom-col { height: 40vh; }
+  .side-panel { height: 60vh; }
+  .live-topbar { padding: 6px 10px; }
+  .live-meta .role-chip { display: none; }
+}
+
+/* ── Mobile Zoom SDK fix ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  #meetingSDKElement {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 200px;
+  }
+  #meetingSDKElement > div {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .zoom-col {
+    min-height: 250px;
+  }
+  /* Panel tabs - show all 4 but smaller */
+  .panel-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .panel-tab {
+    min-width: 70px;
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+}
+
+/* ── Zoom Component View (mobile) ─────────────────────────────── */
+.zoom-embed-mobile {
+  position: relative !important;
+  width: 100% !important;
+  height: 250px !important;
+}
+.zoom-embed-mobile > div {
+  width: 100% !important;
+  height: 250px !important;
+}
+
+/* ── Mobile Component View video fix ─────────────────────────── */
+@media (max-width: 768px) {
+  .zoom-embed-mobile {
+    position: relative !important;
+    width: 100% !important;
+    height: 250px !important;
+    background: #1a1a2e;
+    overflow: hidden;
+  }
+  .zoom-embed-mobile > div,
+  .zoom-embed-mobile canvas,
+  .zoom-embed-mobile video {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* Component view container */
+  #meetingSDKElement.zoom-embed-mobile {
+    display: block !important;
+    min-height: 250px;
+  }
+}
+
+/* ── Mobile transcript fixed height ──────────────────────────── */
+@media (max-width: 768px) {
+  .side-panel {
+    height: calc(100dvh - 45vh - 48px) !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .transcript-body {
+    flex: 1;
+    overflow-y: auto;
+    max-height: none;
+    min-height: 0;
+  }
+  .zoom-col {
+    height: 45vh !important;
+    flex-shrink: 0;
+  }
+  .live-workbench {
+    grid-template-rows: 45vh 1fr !important;
+    height: calc(100dvh - 48px) !important;
+  }
+}
