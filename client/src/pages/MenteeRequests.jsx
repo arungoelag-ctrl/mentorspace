@@ -71,13 +71,6 @@ export default function MenteeRequests({ embedded = false, initialFilter = 'all'
         <button className="mreq-find-btn" onClick={() => navigate('/discover')}>🔍 Discover Mentors</button>
       </div>}
 
-      <div className="mreq-tabs">
-        {[['all','All',requests.length],['pending','Pending',requests.filter(r=>r.status==='pending').length],['accepted','Accepted',requests.filter(r=>r.status==='accepted').length],['rescheduled','Rescheduled',requests.filter(r=>r.status==='rescheduled').length],['declined','Declined',requests.filter(r=>r.status==='declined').length]].map(([val,label,count]) => (
-          <button key={val} className={`mreq-tab ${filterStatus===val?'active':''}`} onClick={() => setFilterStatus(val)}>
-            {label} <span className="mreq-tab-count">{count}</span>
-          </button>
-        ))}
-      </div>
 
       {loading ? <div className="avail-loading">Loading…</div> :
        filtered.length === 0 ? (

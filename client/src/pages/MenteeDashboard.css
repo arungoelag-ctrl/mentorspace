@@ -209,7 +209,7 @@
   .mentee-body { flex-direction: column; padding: 0; }
   .mentee-sidebar {
     display: flex !important; flex-direction: row;
-    position: fixed; bottom: 0; left: 0; right: 0;
+    position: fixed; bottom: 0; left: 0; right: 0; width: 100%; width: 100%; width: 100%;
     background: #fff; border-top: 1px solid #e2e8f0;
     padding: 0; z-index: 1000;
     box-shadow: 0 -2px 16px rgba(0,0,0,0.08);
@@ -257,7 +257,7 @@
 @media (max-width: 768px) {
   .mobile-bottom-nav {
     display: flex;
-    position: fixed; bottom: 0; left: 0; right: 0;
+    position: fixed; bottom: 0; left: 0; right: 0; width: 100%; width: 100%; width: 100%;
     background: #fff; border-top: 1px solid #e2e8f0;
     height: 58px; z-index: 1000;
     box-shadow: 0 -2px 16px rgba(0,0,0,0.08);
@@ -276,4 +276,10 @@
   /* Hide old desktop sidebar on mobile */
   .mentee-sidebar { display: none !important; }
   .mentee-main { padding-bottom: 70px !important; }
+}
+
+@media (max-width: 768px) {
+  .discover-wrap .mobile-bottom-nav {
+    flex-shrink: 0;
+  }
 }

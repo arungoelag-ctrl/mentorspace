@@ -7,11 +7,6 @@ import MenteeRequestsTab from './MenteeRequests'
 import DiscoverMentorsTab from './DiscoverMentors'
 import './MenteeDashboard.css'
 
-function hour() {
-  const h = new Date().getHours()
-  return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
-}
-
 function SessionCard({ session, insights }) {
   const [expanded, setExpanded] = useState(false)
   const [viewingTranscript, setViewingTranscript] = useState(false)
@@ -35,7 +30,6 @@ function SessionCard({ session, insights }) {
             <span style={{color:'#6b6f94',fontSize:12}}>{expanded ? '▲' : '▼'}</span>
           </div>
         </div>
-
         {expanded && (
           <div className="mentee-session-insight" onClick={e => e.stopPropagation()}>
             {finalInsight ? (
@@ -77,7 +71,6 @@ function SessionCard({ session, insights }) {
           </div>
         )}
       </div>
-
       {viewingTranscript && (
         <TranscriptViewer sessionId={session.meeting_id} topic={session.topic} onClose={() => setViewingTranscript(false)} />
       )}
@@ -92,12 +85,13 @@ export default function MenteeDashboard() {
   const [sessions, setSessions] = useState([])
   const [insights, setInsights] = useState([])
   const [loading, setLoading] = useState(false)
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [activeView, setActiveView] = useState('sessions')
+  const [statusFilter, setStatusFilter] = useState('ended')
   const [mainTab, setMainTab] = useState('sessions')
   const [requestsFilter, setRequestsFilter] = useState('pending')
-  const [matchCache, setMatchCache] = useState(null)
   const [requestsRefresh, setRequestsRefresh] = useState(0)
+  const [joinId, setJoinId] = useState('')
+  const [joinPw, setJoinPw] = useState('')
+  const [menteeRequests, setMenteeRequests] = useState([])
 
   useEffect(() => {
     if (location.state?.tab) {
@@ -107,10 +101,9 @@ export default function MenteeDashboard() {
       window.history.replaceState({}, '')
     }
   }, [])
-  const [joinId, setJoinId] = useState('')
-  const [joinPw, setJoinPw] = useState('')
 
   useEffect(() => { if (profile) fetchData() }, [profile])
+  useEffect(() => { if (user) fetchMenteeRequests() }, [user])
 
   async function fetchData() {
     try {
@@ -123,6 +116,12 @@ export default function MenteeDashboard() {
         setInsights(insightData || [])
       }
     } catch(e) { console.error(e) }
+  }
+
+  async function fetchMenteeRequests() {
+    const { data } = await supabase.from('meeting_requests').select('id,status')
+      .eq('mentee_email', user?.email)
+    setMenteeRequests(data || [])
   }
 
   function handleJoin() {
@@ -141,20 +140,10 @@ export default function MenteeDashboard() {
     navigate(`/session/${joinId.trim()}`)
   }
 
-  const finalInsights = insights.filter(i => i.is_final)
   const uniqueMentors = [...new Set(sessions.map(s => s.mentor_name).filter(Boolean))]
-  const [menteeRequests, setMenteeRequests] = useState([])
-
-  useEffect(() => { if (user) fetchMenteeRequests() }, [user])
-
-  async function fetchMenteeRequests() {
-    const { data } = await supabase.from('meeting_requests').select('id,status')
-      .eq('mentee_email', user?.email)
-    setMenteeRequests(data || [])
-  }
-
   const pendingRequests = menteeRequests.filter(r => r.status === 'pending')
   const upcomingMeetings = menteeRequests.filter(r => r.status === 'accepted')
+  const declinedRequests = menteeRequests.filter(r => r.status === 'declined')
 
   return (
     <div className="mentee-wrap">
@@ -173,11 +162,10 @@ export default function MenteeDashboard() {
         </div>
       </div>
 
-      {/* Mobile bottom nav - separate from desktop sidebar */}
       <div className="mobile-bottom-nav">
         <div className={`mobile-nav-item ${mainTab==='requests'?'active':''}`} onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
           <span>📬</span>
-          <span>Requests{pendingRequests.length>0?` (${pendingRequests.length})`:''}</span>
+          <span>Meetings{menteeRequests.length>0?' ('+menteeRequests.length+')':''}</span>
         </div>
         <div className="mobile-nav-item" onClick={()=>navigate('/discover')}>
           <span>🔍</span><span>Find Mentor</span>
@@ -205,7 +193,7 @@ export default function MenteeDashboard() {
           <div className={`md-mentee-row ${mainTab==='requests'?'active':''}`} onClick={() => { setMainTab('requests'); setRequestsFilter('pending') }}>
             <div className="mentee-nav-icon">📬</div>
             <div>
-              <div className="md-mentee-name">My Requests</div>
+              <div className="md-mentee-name">My Meetings</div>
               {pendingRequests.length > 0 && <div className="md-mentee-meta" style={{color:'#e8b84b'}}>{pendingRequests.length} pending</div>}
             </div>
           </div>
@@ -218,90 +206,82 @@ export default function MenteeDashboard() {
             <div className="md-mentee-name">My Profile</div>
           </div>
         </div>
+
         <div className="mentee-main">
-        {/* Stats */}
-        <div className="md-stats">
-          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='all'?'active':''}`}
-            onClick={()=>{ setMainTab('sessions'); setStatusFilter('all') }}>
-            <div className="md-stat-val">{sessions.length}</div>
-            <div className="md-stat-label">All Sessions</div>
-          </div>
-
-          <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='ended'?'active':''}`}
-            onClick={()=>{ setMainTab('sessions'); setStatusFilter('ended') }}>
-            <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
-            <div className="md-stat-label">Completed</div>
-          </div>
-          <div className={`md-stat md-stat-clickable md-stat-pending ${mainTab==='requests'&&requestsFilter==='pending'?'active':''}`}
-            onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
-            <div className="md-stat-val md-stat-val-pending">{pendingRequests.length}</div>
-            <div className="md-stat-label">Pending Requests</div>
-          </div>
-          <div className={`md-stat md-stat-clickable md-stat-upcoming ${mainTab==='requests'&&requestsFilter==='accepted'?'active':''}`}
-            onClick={()=>{ setMainTab('requests'); setRequestsFilter('accepted') }}>
-            <div className="md-stat-val md-stat-val-upcoming">{upcomingMeetings.length}</div>
-            <div className="md-stat-label">Upcoming Meetings</div>
-          </div>
-        </div>
-
-        {/* Quick Join */}
-        <div className="mentee-quick-join md-join-section">
-          <div className="mentee-qj-title">🔗 Join a Session</div>
-          <div className="mentee-qj-row">
-            <input className="mentee-qj-input" placeholder="Enter Meeting ID from your mentor"
-              value={joinId} onChange={e => setJoinId(e.target.value.replace(/\s/g, ''))}
-              onKeyDown={e => e.key === 'Enter' && handleJoin()} />
-            <input className="mentee-qj-input mentee-qj-pw" placeholder="Password (if any)"
-              value={joinPw} onChange={e => setJoinPw(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleJoin()} />
-            <button className="mentee-qj-btn" onClick={handleJoin} disabled={!joinId.trim()}>
-              Join →
-            </button>
-          </div>
-        </div>
-
-        <div className="md-main-tabs">
-          <button className={`md-main-tab ${mainTab==='sessions'?'active':''}`} onClick={()=>setMainTab('sessions')}>📋 Completed Meetings</button>
-          <button className={`md-main-tab ${mainTab==='requests'?'active':''}`} onClick={()=>setMainTab('requests')}>📬 My Requests</button>
-          <button className={`md-main-tab ${mainTab==='profile'?'active':''}`} onClick={()=>setMainTab('profile')}>👤 My Profile</button>
-        </div>
-
-        <div style={{display: mainTab==='sessions' ? 'block' : 'none'}}>
-          <div className="mentee-sessions-list">
-            {loading ? <div className="md-loading">Loading…</div> :
-             sessions.length === 0 ? <div className="md-empty">No sessions yet.<br/>Use the Join box above when your mentor shares a Meeting ID.</div> :
-             sessions.filter(s => statusFilter === 'all' || s.status === statusFilter).map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
-          </div>
-        </div>
-        <div style={{display: mainTab==='requests' ? 'block' : 'none'}}>
-          <MenteeRequestsTab embedded initialFilter={requestsFilter} refreshTrigger={requestsRefresh} />
-        </div>
-<div style={{display: mainTab==='profile' ? 'block' : 'none'}}>
-          <div className="mentee-profile-view">
-            <div className="mentee-profile-header">
-              <div className="mentee-profile-avatar">{profile?.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
-              <div>
-                <div className="mentee-profile-name">{profile?.full_name}</div>
-                <div className="mentee-profile-email">{profile?.email}</div>
-                {profile?.tiering && <div className="mentee-profile-tier" style={{color: profile?.tiering === 'Accelerate' ? 'var(--accent)' : 'var(--green)'}}>{profile?.tiering}</div>}
-              </div>
+          <div className="md-stats">
+            <div className={`md-stat md-stat-clickable ${mainTab==='sessions'&&statusFilter==='ended'?'active':''}`}
+              onClick={()=>{ setMainTab('sessions'); setStatusFilter('ended') }}>
+              <div className="md-stat-val">{sessions.filter(s=>s.status==='ended').length}</div>
+              <div className="md-stat-label">Completed</div>
             </div>
-            <div className="mentee-profile-grid">
-              {profile?.company_name && <div className="mentee-profile-card"><div className="mentee-profile-label">🏭 Company</div><div className="mentee-profile-value">{profile.company_name}</div></div>}
-              {profile?.product && <div className="mentee-profile-card"><div className="mentee-profile-label">📦 Product</div><div className="mentee-profile-value">{profile.product}</div></div>}
-              {(profile?.location || profile?.state) && <div className="mentee-profile-card"><div className="mentee-profile-label">📍 Location</div><div className="mentee-profile-value">{profile?.location}{profile?.state ? ', '+profile.state : ''}</div></div>}
-              {profile?.revenue_lakhs && <div className="mentee-profile-card"><div className="mentee-profile-label">💰 Revenue</div><div className="mentee-profile-value">₹{profile.revenue_lakhs}L</div></div>}
-              {profile?.employee_count && <div className="mentee-profile-card"><div className="mentee-profile-label">👥 Employees</div><div className="mentee-profile-value">{profile.employee_count}</div></div>}
-              {profile?.theme && <div className="mentee-profile-card"><div className="mentee-profile-label">🎯 Theme</div><div className="mentee-profile-value">{profile.theme}</div></div>}
+            <div className={`md-stat md-stat-clickable md-stat-pending ${mainTab==='requests'&&requestsFilter==='pending'?'active':''}`}
+              onClick={()=>{ setMainTab('requests'); setRequestsFilter('pending') }}>
+              <div className="md-stat-val md-stat-val-pending">{pendingRequests.length}</div>
+              <div className="md-stat-label">Pending</div>
             </div>
-            {profile?.problem_statement && (
-              <div className="mentee-profile-problem">
-                <div className="mentee-profile-label">💬 Problem Statement</div>
-                <div className="mentee-profile-problem-text">{profile.problem_statement}</div>
-              </div>
-            )}
+            <div className={`md-stat md-stat-clickable md-stat-upcoming ${mainTab==='requests'&&requestsFilter==='accepted'?'active':''}`}
+              onClick={()=>{ setMainTab('requests'); setRequestsFilter('accepted') }}>
+              <div className="md-stat-val md-stat-val-upcoming">{upcomingMeetings.length}</div>
+              <div className="md-stat-label">Scheduled</div>
+            </div>
+            <div className={`md-stat md-stat-clickable ${mainTab==='requests'&&requestsFilter==='declined'?'active':''}`}
+              onClick={()=>{ setMainTab('requests'); setRequestsFilter('declined') }}>
+              <div className="md-stat-val" style={{color:'#ef4444'}}>{declinedRequests.length}</div>
+              <div className="md-stat-label">Declined</div>
+            </div>
           </div>
-        </div>
+
+          <div className="mentee-quick-join md-join-section">
+            <div className="mentee-qj-title">🔗 Join a Session</div>
+            <div className="mentee-qj-row">
+              <input className="mentee-qj-input" placeholder="Enter Meeting ID from your mentor"
+                value={joinId} onChange={e => setJoinId(e.target.value.replace(/\s/g, ''))}
+                onKeyDown={e => e.key === 'Enter' && handleJoin()} />
+              <input className="mentee-qj-input mentee-qj-pw" placeholder="Password (if any)"
+                value={joinPw} onChange={e => setJoinPw(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleJoin()} />
+              <button className="mentee-qj-btn" onClick={handleJoin} disabled={!joinId.trim()}>
+                Join →
+              </button>
+            </div>
+          </div>
+
+          <div style={{display: mainTab==='sessions' ? 'block' : 'none'}}>
+            <div className="mentee-sessions-list">
+              {loading ? <div className="md-loading">Loading…</div> :
+               sessions.length === 0 ? <div className="md-empty">No sessions yet.<br/>Use the Join box above when your mentor shares a Meeting ID.</div> :
+               sessions.filter(s => statusFilter === 'all' || s.status === statusFilter).map(s => <SessionCard key={s.id} session={s} insights={insights} />)}
+            </div>
+          </div>
+          <div style={{display: mainTab==='requests' ? 'block' : 'none'}}>
+            <MenteeRequestsTab embedded initialFilter={requestsFilter} refreshTrigger={requestsRefresh} />
+          </div>
+          <div style={{display: mainTab==='profile' ? 'block' : 'none'}}>
+            <div className="mentee-profile-view">
+              <div className="mentee-profile-header">
+                <div className="mentee-profile-avatar">{profile?.full_name?.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+                <div>
+                  <div className="mentee-profile-name">{profile?.full_name}</div>
+                  <div className="mentee-profile-email">{profile?.email}</div>
+                  {profile?.tiering && <div className="mentee-profile-tier" style={{color: profile?.tiering === 'Accelerate' ? 'var(--accent)' : 'var(--green)'}}>{profile?.tiering}</div>}
+                </div>
+              </div>
+              <div className="mentee-profile-grid">
+                {profile?.company_name && <div className="mentee-profile-card"><div className="mentee-profile-label">🏭 Company</div><div className="mentee-profile-value">{profile.company_name}</div></div>}
+                {profile?.product && <div className="mentee-profile-card"><div className="mentee-profile-label">📦 Product</div><div className="mentee-profile-value">{profile.product}</div></div>}
+                {(profile?.location || profile?.state) && <div className="mentee-profile-card"><div className="mentee-profile-label">📍 Location</div><div className="mentee-profile-value">{profile?.location}{profile?.state ? ', '+profile.state : ''}</div></div>}
+                {profile?.revenue_lakhs && <div className="mentee-profile-card"><div className="mentee-profile-label">💰 Revenue</div><div className="mentee-profile-value">₹{profile.revenue_lakhs}L</div></div>}
+                {profile?.employee_count && <div className="mentee-profile-card"><div className="mentee-profile-label">👥 Employees</div><div className="mentee-profile-value">{profile.employee_count}</div></div>}
+                {profile?.theme && <div className="mentee-profile-card"><div className="mentee-profile-label">🎯 Theme</div><div className="mentee-profile-value">{profile.theme}</div></div>}
+              </div>
+              {profile?.problem_statement && (
+                <div className="mentee-profile-problem">
+                  <div className="mentee-profile-label">💬 Problem Statement</div>
+                  <div className="mentee-profile-problem-text">{profile.problem_statement}</div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
