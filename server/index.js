@@ -5,8 +5,11 @@ import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
 
 const app = express();
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'] }));
-app.use(express.json());
+app.use(cors({ 
+  origin: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning']
+}));
+app.use(express.json({ limit: '10mb' }));
 
 const {
   ZOOM_CLIENT_ID,
@@ -151,30 +154,33 @@ app.get('/api/zoom/me', async (req, res) => {
 app.post('/api/intelligence/generate', async (req, res) => {
   try {
     const { summaries, sessionCount } = req.body
-    const text = await callClaude(`You are a market intelligence analyst for Wadhwani Foundation, which runs mentoring programs for entrepreneurs and businesses across India and emerging markets.
+    const text = await callClaude(`You are a market intelligence analyst for Wadhwani Foundation, which runs the Wadhwani Accelerate program for entrepreneurs and MSMEs across India.
 
-You have access to summaries from ${sessionCount} mentoring sessions. Ignore sessions that are purely technical tests with zero business content.
+You have access to business profiles and session transcripts from ${sessionCount} real companies across cohorts in Ahmedabad, Chennai, and Pune.
 
-Session summaries:
+Company data:
 ${summaries}
 
-From the real business content above, generate exactly 8 market intelligence cards. Spread them across DIFFERENT sectors and themes - do not generate more than 2 cards for any single sector. Cover the full range of businesses and topics discussed: healthcare, export, manufacturing, GTM strategy, market expansion, scaling, fundraising, distribution - whatever is present in the data.
+Generate exactly 16 market intelligence cards. Rules:
+1. CROSS-COMPANY PATTERNS: Spot themes across multiple companies — if several companies share the same challenge, that is a strong signal
+2. SPECIFIC NOT GENERIC: Mention company names, revenue numbers, specific markets where available
+3. SECTOR SPREAD: Cover Manufacturing, Textile, Chemical, Auto Components, FMCG, Climate Tech etc.
+4. THEME VARIETY: Cover GTM challenges, scaling barriers, fundraising, market opportunities, competitive dynamics, operations
+5. ACTIONABLE: Each card must have 5 specific actionable insights (not generic advice)
 
-Each card must be about a DIFFERENT insight. Vary the sectors, geographies and themes across all 8 cards.
-
-Respond ONLY with valid JSON array:
+Respond ONLY with valid JSON array of exactly 16 cards:
 [
   {
-    "title": "Concise intelligence title",
-    "summary": "2-3 sentence overview of the insight",
-    "key_insight": "Single most important takeaway in one sentence",
-    "sector": "One of: Manufacturing/SaaS/Fintech/Healthcare/FMCG/Agritech/EV/E-commerce/Export/Retail/EdTech/AI-ML/Climate Tech/Logistics/General",
+    "title": "Specific intelligence title",
+    "summary": "2-3 sentences with specific company examples and data points",
+    "key_insight": "Single most important pattern observed",
+    "sector": "One of: Manufacturing/Textile/Chemical/Auto Components/SaaS/Fintech/Healthcare/FMCG/Agritech/EV/E-commerce/Retail/EdTech/AI/ML/Climate Tech/Logistics/General",
     "geography": "One of: India/Southeast Asia/Europe/USA/Middle East/Africa/Latin America/Global",
-    "theme": "One of: Market Entry/GTM Strategy/Fundraising/Competition/Product/Export/Scaling/Regulation/Distribution/General",
+    "theme": "One of: Market Entry/GTM Strategy/Fundraising/Competition/Product/Scaling/Regulation/Distribution/Operations/Export/General",
     "confidence": "4.5",
-    "opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
-    "challenges": ["challenge 1", "challenge 2"],
-    "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"],
+    "opportunities": ["specific opportunity 1", "specific opportunity 2", "specific opportunity 3"],
+    "challenges": ["specific challenge 1", "specific challenge 2"],
+    "recommendations": ["actionable recommendation 1", "actionable recommendation 2", "actionable recommendation 3", "actionable recommendation 4", "actionable recommendation 5"],
     "session_count": 1
   }
 ]`)
@@ -346,6 +352,56 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+// ─── MASTERCLASS TOPIC INSIGHTS ──────────────────────────────────────────────
+app.post('/api/masterclass/topic-insights', async (req, res) => {
+  try {
+    const { topic, transcripts } = req.body
+    if (!topic || !transcripts?.length) return res.status(400).json({ error: 'Missing topic or transcripts' })
+
+    const combinedContext = transcripts.map(t => {
+      const parts = []
+      parts.push(`--- Session: "${t.session_title}" by ${t.speaker || 'Expert'} ---`)
+
+      if (t.transcript) {
+        parts.push(`SPEAKER CONTENT:\n${t.transcript.slice(0, 3000)}`)
+      }
+      if (t.cc_vtt) {
+        parts.push(`Q&A DIALOGUE (closed captions):\n${t.cc_vtt.slice(0, 2000)}`)
+      }
+      if (t.chat_log) {
+        parts.push(`PARTICIPANT CHAT (what attendees said/asked):\n${t.chat_log.slice(0, 1000)}`)
+      }
+      return parts.join('\n')
+    }).join('\n\n')
+
+    const prompt = `You are analyzing ${transcripts.length} startup masterclass session(s) from the Wadhwani Liftoff program.
+Each session includes the speaker transcript, Q&A dialogue (where available), and participant chat messages.
+
+Topic to focus on: "${topic}"
+
+${combinedContext}
+
+Extract 6-8 specific, actionable insights about "${topic}" synthesized across all ${transcripts.length} session(s).
+- Draw from speaker content, Q&A exchanges, and participant questions/responses
+- Where the Q&A shows what participants struggled with, include that perspective
+- Where chat shows what participants were trying to achieve, factor that in
+- Each insight should be concrete and practical for startup founders
+- Where multiple sessions agree, note the consensus
+- Write in present tense
+
+Respond ONLY with a JSON array of strings, no markdown:
+["insight 1", "insight 2", ...]`
+
+    const text = await callClaude(prompt)
+    const clean = text.trim().replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
+    const insights = JSON.parse(clean)
+    res.json({ insights, sessionCount: transcripts.length })
+  } catch (err) {
+    console.error('Topic insights error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ─── ANTHROPIC HELPER ─────────────────────────────────────────────────────────
 async function callClaude(prompt) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -357,7 +413,7 @@ async function callClaude(prompt) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }]
     })
   })
@@ -1198,6 +1254,102 @@ Write only 2 factual sentences describing what this company is and does. No goal
     const text = await callClaude(prompt)
     res.json({ summary: text.trim() })
   } catch(err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── VENTURE TRANSCRIPT INGEST ──────────────────────────────────────────────
+app.post('/api/venture/ingest', async (req, res) => {
+  try {
+    const { company_name, cohort, month, transcript_b64, profile_b64, sharepoint_path } = req.body
+
+    const mammoth = await import('mammoth')
+
+    let transcript_text = null
+    let profile_text = null
+
+    if (transcript_b64) {
+      const buf = Buffer.from(transcript_b64, 'base64')
+      const result = await mammoth.extractRawText({ buffer: buf })
+      transcript_text = result.value
+    }
+
+    if (profile_b64) {
+      const buf = Buffer.from(profile_b64, 'base64')
+      const result = await mammoth.extractRawText({ buffer: buf })
+      profile_text = result.value
+    }
+
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(
+      process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY
+    )
+
+    const row = {
+      company_name,
+      cohort,
+      month,
+      transcript: transcript_text,
+      profile: profile_text,
+      sharepoint_path,
+      status: 'active'
+    }
+
+    const { error } = await supabase
+      .from('venture_transcripts')
+      .upsert(row, { onConflict: 'company_name,cohort,month' })
+
+    if (error) throw new Error(error.message)
+
+    res.json({ ok: true, transcript_chars: transcript_text?.length, profile_chars: profile_text?.length })
+  } catch (err) {
+    console.error('Venture ingest error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ─── COMPANY INSIGHTS ────────────────────────────────────────────────────────
+app.post('/api/venture/company-insights', async (req, res) => {
+  try {
+    const { company_id, company_name, profile, transcript } = req.body
+    if (!company_id) return res.status(400).json({ error: 'Missing company_id' })
+
+    const context = []
+    if (profile) context.push(`COMPANY PROFILE:\n${profile.slice(0, 3000)}`)
+    if (transcript) context.push(`SESSION TRANSCRIPT:\n${transcript.slice(0, 4000)}`)
+
+    const prompt = `You are analyzing a company from the Wadhwani Accelerate program.
+
+Company: ${company_name}
+
+${context.join('\n\n')}
+
+Extract exactly 5 specific, actionable insights about this company's business situation.
+Each insight should be:
+- Concrete and specific to this company (not generic advice)
+- Drawn directly from the profile or transcript
+- Actionable for the company or their mentor/advisor
+- Written in present tense
+
+Respond ONLY with a JSON array of 5 strings:
+["insight 1", "insight 2", "insight 3", "insight 4", "insight 5"]`
+
+    const text = await callClaude(prompt)
+    const clean = text.trim().replace(/```json|```/g, '').trim()
+    const insights = JSON.parse(clean)
+
+    // Cache in Supabase
+    const { createClient } = await import('@supabase/supabase-js')
+    const sb = createClient(
+      process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY
+    )
+    await sb.from('company_insights').upsert({ company_id, insights }, { onConflict: 'company_id' })
+
+    res.json({ insights })
+  } catch (err) {
+    console.error('Company insights error:', err)
     res.status(500).json({ error: err.message })
   }
 })
